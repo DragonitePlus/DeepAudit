@@ -27,3 +27,22 @@ CREATE TABLE IF NOT EXISTS sys_risk_rule (
     regex VARCHAR(255),
     score INT
 );
+
+CREATE TABLE IF NOT EXISTS sys_sensitive_table (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    table_name VARCHAR(100) NOT NULL UNIQUE,
+    sensitivity_level INT DEFAULT 1 COMMENT '1:Low, 2:Medium, 3:High, 4:Critical',
+    coefficient DOUBLE DEFAULT 1.0 COMMENT 'Risk Multiplier'
+);
+
+CREATE TABLE IF NOT EXISTS sys_user_risk_profile (
+    app_user_id VARCHAR(64) PRIMARY KEY,
+    current_score INT DEFAULT 0,
+    risk_level VARCHAR(20) DEFAULT 'NORMAL', -- NORMAL, OBSERVATION, BLOCKED
+    last_update_time DATETIME,
+    description VARCHAR(255)
+);
+
+-- Init Data
+INSERT INTO sys_sensitive_table (table_name, sensitivity_level, coefficient) VALUES ('sys_user', 3, 1.5) ON DUPLICATE KEY UPDATE coefficient=1.5;
+INSERT INTO sys_sensitive_table (table_name, sensitivity_level, coefficient) VALUES ('sys_risk_rule', 2, 1.2) ON DUPLICATE KEY UPDATE coefficient=1.2;
