@@ -8,7 +8,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@MapperScan("edu.hnu.deepaudit.mapper")
+@MapperScan({"edu.hnu.deepaudit.mapper", "edu.hnu.deepaudit.persistence.mapper"})
 public class MybatisPlusConfig {
 
     @Bean
