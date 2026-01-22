@@ -6,6 +6,7 @@ import edu.hnu.deepaudit.control.RiskStateMachine;
 import edu.hnu.deepaudit.interception.AuditSink;
 import edu.hnu.deepaudit.interception.SqlParserUtils;
 import edu.hnu.deepaudit.model.SysAuditLog;
+import edu.hnu.deepaudit.model.dto.AuditLogFeatureDTO;
 import edu.hnu.deepaudit.persistence.AuditPersistenceService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,6 +40,9 @@ public class CoreAuditService implements AuditSink {
 
     @Autowired
     private AuditProperties auditProperties;
+
+    @Autowired
+    private AnomalyDetectionService anomalyDetectionService;
 
     /**
      * Process an audit request asynchronously
@@ -86,6 +90,20 @@ public class CoreAuditService implements AuditSink {
             userId = "unknown";
         }
         String action = riskStateMachine.checkStatus(userId, riskScore);
+
+        // 3.1 AI Anomaly Detection (Async)
+        // Extract features for AI
+        AuditLogFeatureDTO features = AuditLogFeatureDTO.builder()
+                .timestamp(System.currentTimeMillis())
+                .rowCount(1) // Placeholder, ideally from result or parser
+                .execTime(request.getExecutionTime())
+                .sqlLength(sql.length())
+                .numTables(tables.size())
+                .numJoins(0) // Need parser support for join count
+                .freq1Min(0) // Need Redis counter support
+                .build();
+        
+        anomalyDetectionService.detectAnomalyAsync(userId, features);
         
         // 4. Log/Persist
         log.info("DeepAudit [Source: {}] [User: {}] [Op: {}] [Tables: {}] [Risk: {}] [Action: {}] [Time: {}ms]",
