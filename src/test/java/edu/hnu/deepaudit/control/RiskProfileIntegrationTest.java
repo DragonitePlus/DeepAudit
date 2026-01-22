@@ -2,7 +2,7 @@ package edu.hnu.deepaudit.control;
 
 import edu.hnu.deepaudit.exception.RiskControlException;
 import edu.hnu.deepaudit.interception.UserContext;
-import edu.hnu.deepaudit.mapper.SysUserMapper;
+import edu.hnu.deepaudit.mapper.biz.SysUserMapper;
 import edu.hnu.deepaudit.model.SysUserRiskProfile;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,8 +42,18 @@ class RiskProfileIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        System.out.println(">>> [SetUp] Cleaning up test data for " + TEST_USER);
         jdbcTemplate.update("DELETE FROM sys_user_risk_profile WHERE app_user_id = ?", TEST_USER);
+        jdbcTemplate.update("DELETE FROM sys_user WHERE username = 'TestUser'");
         jdbcTemplate.update("INSERT INTO sys_user (id, username) VALUES (999, 'TestUser') ON DUPLICATE KEY UPDATE username='TestUser'");
+    }
+
+    @AfterEach
+    void tearDown() {
+        System.out.println(">>> [TearDown] Cleaning up test data for " + TEST_USER);
+        jdbcTemplate.update("DELETE FROM sys_user_risk_profile WHERE app_user_id = ?", TEST_USER);
+        jdbcTemplate.update("DELETE FROM sys_user WHERE username = 'TestUser'");
+        System.out.println(">>> [TearDown] Cleanup complete.");
     }
 
     @Test
@@ -98,9 +108,22 @@ class RiskProfileIntegrationTest {
         UserContext.setUserId(TEST_USER);
         try {
             // 4. 验证拦截器抛出异常
-            Assertions.assertThrows(RiskControlException.class, () -> {
+            // MyBatis Plus 可能会将底层异常包装为 MyBatisSystemException
+            Exception exception = Assertions.assertThrows(Exception.class, () -> {
                 sysUserMapper.selectById(999L);
-            }, "Should throw RiskControlException when accessing DB while blocked");
+            }, "Should throw exception when accessing DB while blocked");
+            
+            // 验证异常链中是否包含 RiskControlException
+            Throwable rootCause = exception;
+            boolean found = false;
+            while (rootCause != null) {
+                if (rootCause instanceof RiskControlException) {
+                    found = true;
+                    break;
+                }
+                rootCause = rootCause.getCause();
+            }
+            Assertions.assertTrue(found, "Exception cause should be RiskControlException");
 
         } finally {
             UserContext.clear();

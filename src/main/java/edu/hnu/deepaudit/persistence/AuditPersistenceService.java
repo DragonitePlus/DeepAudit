@@ -1,7 +1,7 @@
 package edu.hnu.deepaudit.persistence;
 
 import edu.hnu.deepaudit.model.SysAuditLog;
-import edu.hnu.deepaudit.persistence.mapper.SysAuditLogMapper;
+import edu.hnu.deepaudit.mapper.sys.SysAuditLogMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 

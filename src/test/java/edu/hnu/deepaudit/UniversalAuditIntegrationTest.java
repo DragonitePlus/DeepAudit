@@ -32,12 +32,25 @@ class UniversalAuditIntegrationTest {
     @BeforeEach
     void setUp() {
         // Clean up test data for current user to ensure isolation
+        System.out.println(">>> [SetUp] Ensuring clean state for test...");
+        // Although tearDown cleans up, setUp ensures a fresh start if previous run crashed hard
+        jdbcTemplate.update("DELETE FROM sys_audit_log WHERE app_user_id LIKE ?", TEST_USER_PREFIX + "%");
+        jdbcTemplate.update("DELETE FROM sys_user WHERE username LIKE ?", "CountTest%");
+        jdbcTemplate.update("DELETE FROM sys_user WHERE username = 'TypeTest'");
     }
 
     @AfterEach
     void tearDown() {
+        System.out.println(">>> [TearDown] Cleaning up test data...");
         // Cleanup logs created by tests
-        jdbcTemplate.update("DELETE FROM sys_audit_log WHERE app_user_id LIKE ?", TEST_USER_PREFIX + "%");
+        int logsDeleted = jdbcTemplate.update("DELETE FROM sys_audit_log WHERE app_user_id LIKE ?", TEST_USER_PREFIX + "%");
+        System.out.println(">>> [TearDown] Deleted " + logsDeleted + " audit logs.");
+        
+        // Cleanup users created by tests
+        int usersDeleted = jdbcTemplate.update("DELETE FROM sys_user WHERE username LIKE ?", "CountTest%");
+        usersDeleted += jdbcTemplate.update("DELETE FROM sys_user WHERE username = 'TypeTest'");
+        System.out.println(">>> [TearDown] Deleted " + usersDeleted + " test users.");
+        System.out.println(">>> [TearDown] Cleanup complete.");
     }
 
     /**

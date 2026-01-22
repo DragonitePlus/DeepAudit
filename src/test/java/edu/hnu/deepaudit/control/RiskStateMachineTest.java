@@ -1,7 +1,8 @@
 package edu.hnu.deepaudit.control;
 
 import edu.hnu.deepaudit.config.RiskProperties;
-import edu.hnu.deepaudit.mapper.SysUserRiskProfileMapper;
+import edu.hnu.deepaudit.mapper.sys.SysUserRiskProfileMapper;
+import edu.hnu.deepaudit.model.SysUserRiskProfile;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

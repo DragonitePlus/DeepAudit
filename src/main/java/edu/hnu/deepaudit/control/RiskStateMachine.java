@@ -1,7 +1,7 @@
 package edu.hnu.deepaudit.control;
 
 import edu.hnu.deepaudit.config.RiskProperties;
-import edu.hnu.deepaudit.mapper.SysUserRiskProfileMapper;
+import edu.hnu.deepaudit.mapper.sys.SysUserRiskProfileMapper;
 import edu.hnu.deepaudit.model.SysUserRiskProfile;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

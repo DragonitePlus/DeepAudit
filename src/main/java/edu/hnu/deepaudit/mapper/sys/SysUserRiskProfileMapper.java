@@ -1,4 +1,4 @@
-package edu.hnu.deepaudit.mapper;
+package edu.hnu.deepaudit.mapper.sys;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import edu.hnu.deepaudit.model.SysUserRiskProfile;
