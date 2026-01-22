@@ -10,12 +10,15 @@ public class AuditRequest {
     private Object result; // Optional, might be too large
     private String source; // "JDBC", "MyBatis", "External"
     private String clientIp;
+    private String actionTaken;
     private String extraInfo;
 
-    public AuditRequest() {
+
+    public AuditRequest(String actionTaken) {
+        this.actionTaken = actionTaken;
     }
 
-    public AuditRequest(String traceId, String appUserId, String sql, long executionTime, Object result, String source, String clientIp, String extraInfo) {
+    public AuditRequest(String traceId, String appUserId, String sql, long executionTime, Object result, String source, String clientIp, String actionTaken, String extraInfo) {
         this.traceId = traceId;
         this.appUserId = appUserId;
         this.sql = sql;
@@ -23,6 +26,7 @@ public class AuditRequest {
         this.result = result;
         this.source = source;
         this.clientIp = clientIp;
+        this.actionTaken = actionTaken;
         this.extraInfo = extraInfo;
     }
 
@@ -87,6 +91,10 @@ public class AuditRequest {
         this.clientIp = clientIp;
     }
 
+    public String getActionTaken() { return actionTaken; }
+
+    public void setActionTaken(String actionTaken) { this.actionTaken = actionTaken; }
+
     public String getExtraInfo() {
         return extraInfo;
     }
@@ -107,12 +115,13 @@ public class AuditRequest {
                 Objects.equals(result, that.result) &&
                 Objects.equals(source, that.source) &&
                 Objects.equals(clientIp, that.clientIp) &&
+                Objects.equals(actionTaken, that.actionTaken) &&
                 Objects.equals(extraInfo, that.extraInfo);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(traceId, appUserId, sql, executionTime, result, source, clientIp, extraInfo);
+        return Objects.hash(traceId, appUserId, sql, executionTime, result, source, clientIp, actionTaken, extraInfo);
     }
 
     @Override
@@ -125,6 +134,7 @@ public class AuditRequest {
                 ", result=" + result +
                 ", source='" + source + '\'' +
                 ", clientIp='" + clientIp + '\'' +
+                ", actionTaken='" + actionTaken + '\'' +
                 ", extraInfo='" + extraInfo + '\'' +
                 '}';
     }
@@ -137,6 +147,7 @@ public class AuditRequest {
         private Object result;
         private String source;
         private String clientIp;
+        private String actionTaken;
         private String extraInfo;
 
         AuditRequestBuilder() {
@@ -177,18 +188,23 @@ public class AuditRequest {
             return this;
         }
 
+        public AuditRequestBuilder actionTaken(String actionTaken) {
+            this.actionTaken = actionTaken;
+            return this;
+        }
+
         public AuditRequestBuilder extraInfo(String extraInfo) {
             this.extraInfo = extraInfo;
             return this;
         }
 
         public AuditRequest build() {
-            return new AuditRequest(traceId, appUserId, sql, executionTime, result, source, clientIp, extraInfo);
+            return new AuditRequest(traceId, appUserId, sql, executionTime, result, source, clientIp, actionTaken, extraInfo);
         }
 
         @Override
         public String toString() {
-            return "AuditRequest.AuditRequestBuilder(traceId=" + this.traceId + ", appUserId=" + this.appUserId + ", sql=" + this.sql + ", executionTime=" + this.executionTime + ", result=" + this.result + ", source=" + this.source + ", clientIp=" + this.clientIp + ", extraInfo=" + this.extraInfo + ")";
+            return "AuditRequest.AuditRequestBuilder(traceId=" + this.traceId + ", appUserId=" + this.appUserId + ", sql=" + this.sql + ", executionTime=" + this.executionTime + ", result=" + this.result + ", source=" + this.source + ", clientIp=" + this.clientIp + ", actionTaken=" + this.actionTaken + ", extraInfo=" + this.extraInfo + ")";
         }
     }
 }
