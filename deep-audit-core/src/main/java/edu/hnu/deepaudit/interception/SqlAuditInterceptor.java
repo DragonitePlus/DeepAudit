@@ -60,20 +60,40 @@ public class SqlAuditInterceptor implements Interceptor {
         // =================================================================================
         // 🛡️ CRITICAL SAFETY GUARD (递归熔断保护)
         // =================================================================================
-        // 如果 SQL 操作的是审计系统自己的表 (sys_audit_log) 或 风控状态表 (sys_user_risk_profile)，
-        // 必须立即无条件放行！否则：
-        // 1. 记录日志 -> 触发拦截 -> 记录日志 -> 死循环 (StackOverflow)
-        // 2. 检查风控 -> 查库 -> 触发拦截 -> 检查风控 -> 死循环
         if (isInternalSystemTable(sql)) {
             return invocation.proceed();
         }
 
         // 2. 获取用户上下文
         String currentUserId = UserContext.getUserId();
+        
+        // 3. 注入 SQL Hint (ShardingSphere Proxy 适配)
+        // 如果我们连接的是 Proxy，这一步至关重要，它告诉 Proxy 是谁在执行 SQL
+        if (StringUtils.hasText(currentUserId) && !"unknown".equals(currentUserId)) {
+            try {
+                // 修改 BoundSql 中的 SQL 语句，注入 Hint
+                // 注意：修改 BoundSql 的 sql 字段可能需要反射，或者根据 MyBatis 版本不同有不同做法
+                // 这里采用一种更通用的方式：如果可能，替换参数。
+                // 但 MyBatis 插件机制修改 SQL 最直接的方式是反射修改 BoundSql 的 sql 字段。
+                
+                String sqlWithHint = "/* user_id:" + currentUserId + " */ " + sql;
+                
+                // 反射修改 sql 字段
+                java.lang.reflect.Field sqlField = BoundSql.class.getDeclaredField("sql");
+                sqlField.setAccessible(true);
+                sqlField.set(boundSql, sqlWithHint);
+                
+                // 更新局部变量 sql 以便后续日志记录使用带 Hint 的版本（可选，或者保留原始 SQL）
+                // sql = sqlWithHint; 
+            } catch (Exception e) {
+                log.warn("Failed to inject SQL Hint for user: {}", currentUserId, e);
+            }
+        }
 
         // =================================================================================
         // 🛑 ACTIVE DEFENSE (主动防御 - 阻断逻辑)
         // =================================================================================
+        // ... (保持原有逻辑)
         // 仅当包含有效用户身份时才检查，避免阻断系统启动时的初始化 SQL
         if (StringUtils.hasText(currentUserId) && !"unknown".equals(currentUserId)) {
             try {
