@@ -1,17 +1,12 @@
 package edu.hnu.deepaudit.model;
 
-import com.baomidou.mybatisplus.annotation.IdType;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableName;
 import java.util.Objects;
 
 /**
  * 敏感表配置实体
  * 用于定义数据库表的敏感级别和风险系数
  */
-@TableName("sys_sensitive_table")
 public class SysSensitiveTable {
-    @TableId(type = IdType.AUTO)
     private Long id;
     
     /**

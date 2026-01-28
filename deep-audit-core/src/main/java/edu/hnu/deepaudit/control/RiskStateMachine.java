@@ -1,67 +1,75 @@
 package edu.hnu.deepaudit.control;
 
-import edu.hnu.deepaudit.config.RiskProperties;
-import edu.hnu.deepaudit.mapper.sys.SysUserRiskProfileMapper;
+import edu.hnu.deepaudit.config.DeepAuditConfig;
 import edu.hnu.deepaudit.model.SysUserRiskProfile;
+import edu.hnu.deepaudit.persistence.JdbcRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.core.io.ClassPathResource;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.script.DefaultRedisScript;
-import org.springframework.scripting.support.ResourceScriptSource;
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisPool;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 /**
- * Risk State Machine
- * Based on RAdAC (Risk-Adaptive Access Control)
- * Uses Redis Lua scripts for atomic state transitions.
- * Refactored to be a POJO for Plugin use.
+ * Risk State Machine (POJO Version)
+ * Uses Jedis for Redis operations.
  */
 public class RiskStateMachine {
 
     private static final Logger log = LoggerFactory.getLogger(RiskStateMachine.class);
 
-    private StringRedisTemplate redisTemplate;
-    private RiskProperties riskProperties;
-    private SysUserRiskProfileMapper sysUserRiskProfileMapper;
+    private JedisPool jedisPool;
+    private DeepAuditConfig config;
+    private JdbcRepository jdbcRepository;
 
-    private DefaultRedisScript<List> riskScript;
+    private String luaScriptSha;
 
     private static final String PROFILE_KEY_PREFIX = "audit:risk:";
     private static final String WINDOW_KEY_PREFIX = "audit:window:";
 
-    // Manual setter injection
-    public void setRedisTemplate(StringRedisTemplate redisTemplate) {
-        this.redisTemplate = redisTemplate;
+    public void setJedisPool(JedisPool jedisPool) {
+        this.jedisPool = jedisPool;
     }
 
-    public void setRiskProperties(RiskProperties riskProperties) {
-        this.riskProperties = riskProperties;
+    public void setConfig(DeepAuditConfig config) {
+        this.config = config;
     }
 
-    public void setSysUserRiskProfileMapper(SysUserRiskProfileMapper mapper) {
-        this.sysUserRiskProfileMapper = mapper;
+    public void setJdbcRepository(JdbcRepository jdbcRepository) {
+        this.jdbcRepository = jdbcRepository;
     }
 
     public void init() {
-        riskScript = new DefaultRedisScript<>();
-        riskScript.setScriptSource(new ResourceScriptSource(new ClassPathResource("scripts/risk_control.lua")));
-        riskScript.setResultType(List.class);
+        // Load Lua script
+        try (InputStream is = getClass().getClassLoader().getResourceAsStream("scripts/risk_control.lua")) {
+            if (is == null) {
+                log.error("Lua script not found at scripts/risk_control.lua");
+                return;
+            }
+            String script = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))
+                    .lines().collect(Collectors.joining("\n"));
+            
+            try (Jedis jedis = jedisPool.getResource()) {
+                this.luaScriptSha = jedis.scriptLoad(script);
+                log.info("Loaded risk control Lua script, SHA: {}", luaScriptSha);
+            }
+        } catch (IOException e) {
+            log.error("Failed to load Lua script", e);
+        }
     }
 
-    /**
-     * Check user status and perform state transition
-     * @param userId App User ID
-     * @param currentRiskScore Current instantaneous risk score
-     * @return Action (ALLOW, WARNING, BLOCK)
-     */
     public String checkStatus(String userId, int currentRiskScore) {
-        if (redisTemplate == null || riskProperties == null) {
-            log.warn("RiskStateMachine not initialized properly. Allowing by default.");
+        if (jedisPool == null || config == null) {
+            log.warn("RiskStateMachine not initialized. Defaulting to ALLOW.");
             return "ALLOW";
         }
 
@@ -69,36 +77,50 @@ public class RiskStateMachine {
         String windowKey = WINDOW_KEY_PREFIX + userId;
         long now = System.currentTimeMillis() / 1000;
 
-        // Lua Script Execution
-        List<String> result = redisTemplate.execute(riskScript, 
-                Arrays.asList(profileKey, windowKey),
-                String.valueOf(currentRiskScore),
-                String.valueOf(now),
-                String.valueOf(riskProperties.getDecayRate()),
-                String.valueOf(riskProperties.getObservationThreshold()),
-                String.valueOf(riskProperties.getBlockThreshold()),
-                String.valueOf(riskProperties.getWindowTtl())
-        );
-
-        if (result != null && result.size() >= 3) {
-            String state = result.get(0);
-            String score = result.get(1);
-            String action = result.get(2);
+        try (Jedis jedis = jedisPool.getResource()) {
+            if (luaScriptSha == null) {
+                // Retry loading script if SHA is missing (e.g. Redis restart)
+                init();
+                if (luaScriptSha == null) return "ALLOW";
+            }
             
-            // Async persist to MySQL (Simulated Async)
-            CompletableFuture.runAsync(() -> persistRiskProfile(userId, Integer.parseInt(score), state));
+            Object resultObj = jedis.evalsha(luaScriptSha, 
+                Arrays.asList(profileKey, windowKey), 
+                Arrays.asList(
+                    String.valueOf(currentRiskScore),
+                    String.valueOf(now),
+                    String.valueOf(config.getDecayRate()),
+                    String.valueOf(config.getObservationThreshold()),
+                    String.valueOf(config.getBlockThreshold()),
+                    String.valueOf(config.getWindowTtl())
+                )
+            );
 
-            return action;
+            if (resultObj instanceof List) {
+                List<?> result = (List<?>) resultObj;
+                if (result.size() >= 3) {
+                    String state = (String) result.get(0);
+                    String scoreStr = (String) result.get(1);
+                    String action = (String) result.get(2);
+                    
+                    double score = Double.parseDouble(scoreStr);
+                    
+                    // Async persist
+                    CompletableFuture.runAsync(() -> persistRiskProfile(userId, (int)score, state));
+                    
+                    return action;
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error executing risk script", e);
+            // On error, fail open (ALLOW) to avoid blocking legitimate traffic due to infrastructure issues
         }
 
-        return "ALLOW"; // Default ALLOW
+        return "ALLOW";
     }
 
-    /**
-     * Persist risk profile to DB
-     */
     private void persistRiskProfile(String userId, int score, String state) {
-        if (sysUserRiskProfileMapper == null) return;
+        if (jdbcRepository == null) return;
         
         try {
             SysUserRiskProfile profile = new SysUserRiskProfile();
@@ -107,14 +129,9 @@ public class RiskStateMachine {
             profile.setRiskLevel(state);
             profile.setLastUpdateTime(LocalDateTime.now());
             
-            SysUserRiskProfile existing = sysUserRiskProfileMapper.selectById(userId);
-            if (existing != null) {
-                sysUserRiskProfileMapper.updateById(profile);
-            } else {
-                sysUserRiskProfileMapper.insert(profile);
-            }
+            jdbcRepository.saveOrUpdateRiskProfile(profile);
         } catch (Exception e) {
-            log.error("Failed to persist risk profile for user: " + userId, e);
+            log.error("Failed to async persist risk profile", e);
         }
     }
 }

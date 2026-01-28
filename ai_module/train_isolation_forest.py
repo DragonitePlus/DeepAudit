@@ -7,6 +7,10 @@ import joblib
 import random
 from datetime import datetime, timedelta
 
+# 引入 ONNX 转换库
+from skl2onnx import convert_sklearn
+from skl2onnx.common.data_types import FloatTensorType
+
 # ==========================================
 # 1. 模拟数据生成 (基于论文 Source 113-117)
 # ==========================================
@@ -93,12 +97,11 @@ def preprocess_features(df):
 def train_and_save():
     print("Generating mock data...")
     raw_df = generate_mock_data()
-    
+
     print("Preprocessing features...")
     X = preprocess_features(raw_df)
-    
+
     # 孤立森林参数建议
-    # contamination: 预计的异常比例，根据业务情况设定，通常 0.01 - 0.1
     clf = IsolationForest(
         n_estimators=100,
         max_samples='auto',
@@ -106,20 +109,43 @@ def train_and_save():
         random_state=42,
         n_jobs=-1
     )
-    
-    # 建议加上标准化，虽然 IF 对缩放不极其敏感，但标准化有助于统一量纲
+
     model_pipeline = Pipeline([
         ('scaler', StandardScaler()),
         ('iso_forest', clf)
     ])
-    
+
     print("Training Isolation Forest model...")
     model_pipeline.fit(X)
-    
-    # 保存模型文件
-    model_path = 'db_audit_iso_forest.joblib'
-    joblib.dump(model_pipeline, model_path)
-    print(f"Model saved to {model_path}")
+
+    # 保存 Joblib 模型 (Python 使用)
+    joblib.dump(model_pipeline, 'db_audit_iso_forest.joblib')
+
+    # ==========================================
+    # 🔥 关键修改：导出为 ONNX
+    # ==========================================
+    print("Converting to ONNX...")
+
+    # 1. 定义输入类型
+    n_features = 8
+    initial_type = [('float_input', FloatTensorType([None, n_features]))]
+
+    # 2. 转换 (修复了报错的部分)
+    # target_opset={'': 12, 'ai.onnx.ml': 3}
+    # '': 12 代表通用算子(Add, MatMul等)使用版本 12
+    # 'ai.onnx.ml': 3 代表机器学习算子(TreeEnsemble等)强制使用版本 3
+    onnx_model = convert_sklearn(
+        model_pipeline,
+        initial_types=initial_type,
+        target_opset={'': 12, 'ai.onnx.ml': 3}
+    )
+
+    # 3. 保存
+    onnx_path = 'deep_audit_iso_forest.onnx'
+    with open(onnx_path, "wb") as f:
+        f.write(onnx_model.SerializeToString())
+
+    print(f"ONNX Model saved to {onnx_path}")
 
 if __name__ == "__main__":
     train_and_save()

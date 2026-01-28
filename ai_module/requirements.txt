@@ -1,5 +1,8 @@
+flask
 pandas
-numpy
 scikit-learn
 joblib
-flask
+numpy
+skl2onnx
+onnx
+protobuf==3.20.2

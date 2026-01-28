@@ -1,7 +1,5 @@
 package edu.hnu.deepaudit.model;
 
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableName;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
@@ -9,9 +7,7 @@ import java.util.Objects;
  * 用户风险画像实体
  * 存储用户的实时风险分和状态
  */
-@TableName("sys_user_risk_profile")
 public class SysUserRiskProfile {
-    @TableId
     private String appUserId;
     
     private Integer currentScore;

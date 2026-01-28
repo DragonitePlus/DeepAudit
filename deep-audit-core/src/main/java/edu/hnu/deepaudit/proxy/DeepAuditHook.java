@@ -4,13 +4,11 @@ import edu.hnu.deepaudit.analysis.DlpEngine;
 import edu.hnu.deepaudit.control.RiskStateMachine;
 import edu.hnu.deepaudit.model.SysAuditLog;
 import edu.hnu.deepaudit.model.dto.AuditLogFeatureDTO;
-import edu.hnu.deepaudit.persistence.AuditPersistenceService;
-import edu.hnu.deepaudit.proxy.factory.AuditPersistenceServiceFactory;
-import edu.hnu.deepaudit.proxy.factory.RiskStateMachineFactory;
+import edu.hnu.deepaudit.persistence.JdbcRepository;
+import edu.hnu.deepaudit.proxy.factory.DeepAuditFactory;
 import edu.hnu.deepaudit.service.AnomalyDetectionService;
 import org.apache.shardingsphere.infra.database.core.connector.ConnectionProperties;
 import org.apache.shardingsphere.infra.executor.sql.hook.SQLExecutionHook;
-import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -19,44 +17,57 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * DeepAudit Hook Strictly Adapted for ShardingSphere 5.4.1 specific build
+ * DeepAudit Hook Adapted for ShardingSphere 5.4.1 (No-Spring Version)
  */
 public class DeepAuditHook implements SQLExecutionHook {
 
-    private final RiskStateMachine riskStateMachine = RiskStateMachineFactory.getInstance();
-    private final AuditPersistenceService auditPersistenceService = AuditPersistenceServiceFactory.getInstance();
-    private final AnomalyDetectionService anomalyDetectionService = new AnomalyDetectionService();
-    private final DlpEngine dlpEngine = new DlpEngine();
+    private final DeepAuditFactory factory = DeepAuditFactory.getInstance();
+    
+    private final RiskStateMachine riskStateMachine = factory.getRiskStateMachine();
+    private final AnomalyDetectionService anomalyDetectionService = factory.getAnomalyDetectionService();
+    private final DlpEngine dlpEngine = factory.getDlpEngine();
+    private final JdbcRepository jdbcRepository = factory.getJdbcRepository();
     
     private static final Pattern USER_ID_HINT_PATTERN = Pattern.compile("/\\* user_id:(.*?) \\*/");
     
     private static final ThreadLocal<AuditContext> AUDIT_CONTEXT = new ThreadLocal<>();
 
-    // Manual init for AnomalyDetectionService (requires RedisTemplate if we want to use it)
-    // For now, we assume simple HTTP call without Redis or we need to expose Redis from Factory
-    // TODO: Pass RedisTemplate to AnomalyDetectionService via Factory or Singleton
-
     @Override
     public void start(String dataSourceName, String sql, List<Object> parameters,
                       ConnectionProperties connectionProperties, boolean isTrunkThread) {
 
-        // 1. Resolve User ID
+        AUDIT_CONTEXT.remove(); // 防止之前的线程没清理干净
+
         String userId = resolveUserId(sql);
         if (userId == null) {
             userId = "unknown";
         }
 
-        // Store context for finish() phase
+        // 1. 设置上下文
         AUDIT_CONTEXT.set(new AuditContext(userId, sql, System.currentTimeMillis()));
 
-        // 2. Risk Control Check (Synchronous)
-        // Pass 0 score to just check current status (e.g. is user already BLOCKED?)
-        String action = riskStateMachine.checkStatus(userId, 0);
+        try {
+            // 2. 风控检查
+            // 传入 0 分只是为了检查状态 (是否已在黑名单)
+            String action = riskStateMachine.checkStatus(userId, 0);
 
-        if ("BLOCK".equals(action)) {
-            // Log BLOCK event immediately
-            logAudit(userId, sql, 0, "BLOCK", "Risk Control: Access Denied", 0);
-            throw new RuntimeException("DeepAudit Risk Control: Access Denied for user " + userId);
+            if ("BLOCK".equals(action)) {
+                // 3. 记录阻断日志
+                logAudit(userId, sql, 0, "BLOCK", "Risk Control: Access Denied", 0);
+
+                // 🔥🔥 关键修复：在抛出异常前，必须清理 ThreadLocal！🔥🔥
+                // 因为一旦抛出异常，finish 方法就不会被调用了！
+                AUDIT_CONTEXT.remove();
+
+                // 4. 阻断执行
+                throw new RuntimeException("DeepAudit Risk Control: Access Denied for user " + userId);
+            }
+
+        } catch (Exception e) {
+            // 双重保险：如果是 checkStatus 内部报错，也要清理
+            // 如果是上面抛出的 RuntimeException，也会走到这里，清理后再次抛出
+            AUDIT_CONTEXT.remove();
+            throw e;
         }
     }
 
@@ -71,17 +82,21 @@ public class DeepAuditHook implements SQLExecutionHook {
                 // Since we don't have result set here, we simulate DLP or analyze SQL structure
                 int riskScore = dlpEngine.calculateRiskScore(null); // Placeholder
                 
-                // Construct Features for AI
-                AuditLogFeatureDTO features = AuditLogFeatureDTO.builder()
-                        .timestamp(System.currentTimeMillis())
-                        .execTime(duration)
-                        .sqlLength(context.sql.length())
-                        .build();
-                        
-                anomalyDetectionService.detectAnomalyAsync(context.userId, features);
+                // Construct Features for AI (Not needed for DTO anymore, direct pass)
+                // We use new detectRisk method directly
+                int aiRiskScore = (int) anomalyDetectionService.detectRisk(
+                    context.userId, 
+                    LocalDateTime.now(), 
+                    0, // rowCount not available in hook yet
+                    duration, 
+                    context.sql
+                );
+                
+                // Combine scores (max of DLP and AI)
+                int finalRiskScore = Math.max(riskScore, aiRiskScore);
                 
                 // 4. Log Audit
-                logAudit(context.userId, context.sql, duration, "PASS", null, riskScore);
+                logAudit(context.userId, context.sql, duration, "PASS", null, finalRiskScore);
             }
         } finally {
             AUDIT_CONTEXT.remove();
@@ -102,6 +117,8 @@ public class DeepAuditHook implements SQLExecutionHook {
     }
 
     private void logAudit(String userId, String sql, long duration, String action, String extraInfo, int riskScore) {
+        // Use async thread or CompletableFuture to avoid blocking main SQL thread
+        // JdbcRepository is thread-safe (uses HikariCP)
         new Thread(() -> {
             try {
                 SysAuditLog log = new SysAuditLog();
@@ -115,7 +132,7 @@ public class DeepAuditHook implements SQLExecutionHook {
                 log.setExecutionTime(duration);
                 log.setExtraInfo(extraInfo != null ? extraInfo : "Proxy Audit");
                 
-                auditPersistenceService.saveLog(log);
+                jdbcRepository.saveAuditLog(log);
             } catch (Exception ex) {
                 System.err.println("DeepAudit: Failed to save audit log: " + ex.getMessage());
             }

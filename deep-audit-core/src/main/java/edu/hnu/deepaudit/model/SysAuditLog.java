@@ -1,14 +1,9 @@
 package edu.hnu.deepaudit.model;
 
-import com.baomidou.mybatisplus.annotation.IdType;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableName;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
-@TableName("sys_audit_log")
 public class SysAuditLog {
-    @TableId(type = IdType.ASSIGN_UUID)
     private String traceId;
     
     /**
