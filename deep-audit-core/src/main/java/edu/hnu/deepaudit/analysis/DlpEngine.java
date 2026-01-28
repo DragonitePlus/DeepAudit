@@ -1,8 +1,8 @@
 package edu.hnu.deepaudit.analysis;
 
-import org.springframework.stereotype.Component;
-
-@Component
+/**
+ * DLP Engine (POJO)
+ */
 public class DlpEngine {
 
     /**

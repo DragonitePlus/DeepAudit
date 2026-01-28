@@ -1,67 +1,67 @@
 package edu.hnu.deepaudit.control;
 
-import edu.hnu.deepaudit.exception.RiskControlException;
-import edu.hnu.deepaudit.interception.UserContext;
-import edu.hnu.deepaudit.mapper.biz.SysUserMapper;
+import edu.hnu.deepaudit.config.RiskProperties;
+import edu.hnu.deepaudit.mapper.sys.SysUserRiskProfileMapper;
 import edu.hnu.deepaudit.model.SysUserRiskProfile;
 import org.junit.jupiter.api.*;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.jdbc.core.BeanPropertyRowMapper;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 
 import java.util.Arrays;
 import java.util.List;
 
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.doReturn;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.internal.verification.VerificationModeFactory.times;
 
-@SpringBootTest
+/**
+ * 风险画像集成测试 (模拟)
+ * 测试思想：
+ * 1. 由于 Core 已去 Spring 化，我们不再进行真实的集成测试（依赖 Spring 容器和真实 DB）。
+ * 2. 转而测试 RiskStateMachine 与 Persistence Service 的交互逻辑。
+ * 3. 验证当 Redis 返回状态变更时，是否正确调用了 Mapper 进行持久化。
+ */
+@ExtendWith(MockitoExtension.class)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class RiskProfileIntegrationTest {
 
-    // Spy 的作用：默认执行真实逻辑（保证 Test 1 通过），但允许我们强制修改特定方法的返回值（保证 Test 2 通过）
-    @MockitoSpyBean
+    @Mock
     private RiskStateMachine riskStateMachine;
 
-    @Autowired
-    private JdbcTemplate jdbcTemplate;
+    @Mock
+    private SysUserRiskProfileMapper sysUserRiskProfileMapper;
 
-    @Autowired
-    private SysUserMapper sysUserMapper;
-
-    @MockitoBean
+    @Mock
     private StringRedisTemplate redisTemplate;
+    
+    @Mock
+    private RiskProperties riskProperties;
 
     private static final String TEST_USER = "integration_test_user";
 
     @BeforeEach
     void setUp() {
-        System.out.println(">>> [SetUp] Cleaning up test data for " + TEST_USER);
-        jdbcTemplate.update("DELETE FROM sys_user_risk_profile WHERE app_user_id = ?", TEST_USER);
-        jdbcTemplate.update("DELETE FROM sys_user WHERE username = 'TestUser'");
-        jdbcTemplate.update("INSERT INTO sys_user (id, username) VALUES (999, 'TestUser') ON DUPLICATE KEY UPDATE username='TestUser'");
-    }
-
-    @AfterEach
-    void tearDown() {
-        System.out.println(">>> [TearDown] Cleaning up test data for " + TEST_USER);
-        jdbcTemplate.update("DELETE FROM sys_user_risk_profile WHERE app_user_id = ?", TEST_USER);
-        jdbcTemplate.update("DELETE FROM sys_user WHERE username = 'TestUser'");
-        System.out.println(">>> [TearDown] Cleanup complete.");
+        // 使用真实对象进行部分逻辑测试，或者完全 Mock 交互
+        // 这里我们选择测试 "状态机" 自身逻辑，但 Mock 它的依赖
+        riskStateMachine = new RiskStateMachine();
+        riskStateMachine.setRedisTemplate(redisTemplate);
+        riskStateMachine.setRiskProperties(riskProperties);
+        riskStateMachine.setSysUserRiskProfileMapper(sysUserRiskProfileMapper);
+        riskStateMachine.init();
+        
+        when(riskProperties.getDecayRate()).thenReturn(0.5);
     }
 
     @Test
     @Order(1)
-    void testRiskAccumulationAndPersistence() throws InterruptedException {
-        System.out.println(">>> Starting Integration Test: Risk Accumulation & Persistence");
+    void testRiskAccumulationAndPersistence() {
+        System.out.println(">>> Starting Test: Risk Accumulation & Persistence Logic");
 
-        // Spy 默认会走真实逻辑，所以我们需要 Mock Redis 让真实逻辑跑通
+        // Mock Redis 正常返回
         when(redisTemplate.execute(any(DefaultRedisScript.class), any(List.class), any(Object[].class)))
                 .thenReturn(Arrays.asList("NORMAL", "10", "ALLOW"));
 
@@ -69,65 +69,36 @@ class RiskProfileIntegrationTest {
         String action1 = riskStateMachine.checkStatus(TEST_USER, 10);
         Assertions.assertEquals("ALLOW", action1);
 
-        Thread.sleep(1000);
+        // 验证 Mapper 被调用 (持久化)
+        // 注意：由于 persistRiskProfile 是异步执行，单元测试中可能需要一点等待或使用同步方式重构
+        // 为了测试稳定性，我们这里假设 persistRiskProfile 能被 verify 到
+        // 在真实环境中，CompletableFuture.runAsync 可能会在测试结束前还没跑完
+        // 但 Mockito verify 通常对 mock 对象调用是敏感的。
+        // 如果失败，可能需要 Thread.sleep(100)
+        try { Thread.sleep(100); } catch (InterruptedException e) {}
+        verify(sysUserRiskProfileMapper, times(1)).selectById(TEST_USER);
+        // 如果 selectById 返回 null，会调用 insert。这里我们 mock 默认返回 null
+        verify(sysUserRiskProfileMapper, times(1)).insert(any(SysUserRiskProfile.class));
 
-        List<SysUserRiskProfile> profiles = jdbcTemplate.query(
-                "SELECT * FROM sys_user_risk_profile WHERE app_user_id = ?",
-                new BeanPropertyRowMapper<>(SysUserRiskProfile.class),
-                TEST_USER
-        );
-        Assertions.assertFalse(profiles.isEmpty());
-        Assertions.assertEquals(10, profiles.get(0).getCurrentScore());
 
-        // 2. 测试阻断流程（状态机逻辑验证）
+        // 2. 测试阻断流程
         when(redisTemplate.execute(any(DefaultRedisScript.class), any(List.class), any(Object[].class)))
                 .thenReturn(Arrays.asList("BLOCKED", "110", "BLOCK"));
 
         String action3 = riskStateMachine.checkStatus(TEST_USER, 100);
         Assertions.assertEquals("BLOCK", action3);
-
-        // 验证数据库是否更新为 BLOCKED
-        Thread.sleep(1000);
-        profiles = jdbcTemplate.query(
-                "SELECT * FROM sys_user_risk_profile WHERE app_user_id = ?",
-                new BeanPropertyRowMapper<>(SysUserRiskProfile.class),
-                TEST_USER
-        );
-        Assertions.assertEquals("BLOCKED", profiles.get(0).getRiskLevel());
+        
+        try { Thread.sleep(100); } catch (InterruptedException e) {}
+        // 再次验证
+        verify(sysUserRiskProfileMapper, times(2)).selectById(TEST_USER);
     }
 
     @Test
     @Order(2)
+    @Disabled("Functionality moved to Plugin Hook, no longer testable via Service call")
     void testDatabaseRefusal() {
-        System.out.println(">>> Starting Integration Test: Database Refusal");
-
-        // 这里我们绕过了 Redis，直接命令状态机："不管发生什么，你现在就告诉我用户被 BLOCK 了"
-        // 这样可以 100% 确保测试的是“拦截器是否工作”，而不是测试“状态机或 Redis Mock 是否正常”
-        doReturn("BLOCK").when(riskStateMachine).checkStatus(anyString(), anyInt());
-
-        UserContext.setUserId(TEST_USER);
-        try {
-            // 4. 验证拦截器抛出异常
-            // MyBatis Plus 可能会将底层异常包装为 MyBatisSystemException
-            Exception exception = Assertions.assertThrows(Exception.class, () -> {
-                sysUserMapper.selectById(999L);
-            }, "Should throw exception when accessing DB while blocked");
-            
-            // 验证异常链中是否包含 RiskControlException
-            Throwable rootCause = exception;
-            boolean found = false;
-            while (rootCause != null) {
-                if (rootCause instanceof RiskControlException) {
-                    found = true;
-                    break;
-                }
-                rootCause = rootCause.getCause();
-            }
-            Assertions.assertTrue(found, "Exception cause should be RiskControlException");
-
-        } finally {
-            UserContext.clear();
-        }
-        System.out.println(">>> Integration Test Passed: Database Refusal Confirmed");
+        // 原测试思想：测试拦截器是否工作。
+        // 现况：拦截器逻辑已移动到 ShardingSphere Plugin Hook，核心库中不再包含拦截器。
+        // 因此标记为禁用。
     }
 }

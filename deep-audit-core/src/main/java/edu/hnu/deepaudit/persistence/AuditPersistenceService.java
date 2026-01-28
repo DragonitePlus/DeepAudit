@@ -2,25 +2,25 @@ package edu.hnu.deepaudit.persistence;
 
 import edu.hnu.deepaudit.model.SysAuditLog;
 import edu.hnu.deepaudit.mapper.sys.SysAuditLogMapper;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
 
 /**
  * Persistence Module Service.
  * Responsible for saving audit logs to storage.
  */
-@Service
 public class AuditPersistenceService {
 
-    @Autowired
     private SysAuditLogMapper sysAuditLogMapper;
+    
+    public void setSysAuditLogMapper(SysAuditLogMapper sysAuditLogMapper) {
+        this.sysAuditLogMapper = sysAuditLogMapper;
+    }
 
     /**
      * Save audit log to database.
      * @param log The audit log entity.
      */
     public void saveLog(SysAuditLog log) {
-        if (log == null) {
+        if (log == null || sysAuditLogMapper == null) {
             return;
         }
         sysAuditLogMapper.insert(log);

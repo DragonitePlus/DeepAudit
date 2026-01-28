@@ -17,7 +17,7 @@
 
     <modules>
         <module>deep-audit-core</module>
-        <module>deep-audit-shardingsphere-plugin</module>
+        <module>deep-audit-backend</module>
     </modules>
     <url/>
     <licenses>
