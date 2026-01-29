@@ -27,20 +27,44 @@ public class AnomalyDetectionService {
     private OrtEnvironment env;
 
     // Hardcoded model path as per user instruction (could be config driven)
-    private static final String MODEL_PATH = "D:/Code/DeepAudit/models/deep_audit_iso_forest.onnx";
+    // private static final String MODEL_PATH = "D:/Code/DeepAudit/models/deep_audit_iso_forest.onnx";
+    
+    private String currentModelPath;
 
     public AnomalyDetectionService() {
+        // Initial load will be triggered by reloadModel or manual call if needed
+        // For now, we defer loading or use a default if passed in constructor
+    }
+    
+    public synchronized void reloadModel(String modelPath) {
+        if (modelPath == null || modelPath.equals(currentModelPath)) {
+            return;
+        }
+        
+        log.info("Reloading AI Model from: {}", modelPath);
         try {
+            // Close existing
+            if (session != null) {
+                session.close();
+                session = null;
+            }
+            if (env != null) {
+                env.close();
+                env = null;
+            }
+
+            // Init new
             this.env = OrtEnvironment.getEnvironment();
-            File modelFile = new File(MODEL_PATH);
+            File modelFile = new File(modelPath);
             if (modelFile.exists()) {
-                this.session = env.createSession(MODEL_PATH, new OrtSession.SessionOptions());
-                log.info("DeepAudit: ONNX Model loaded successfully from {}", MODEL_PATH);
+                this.session = env.createSession(modelPath, new OrtSession.SessionOptions());
+                this.currentModelPath = modelPath;
+                log.info("DeepAudit: ONNX Model reloaded successfully.");
             } else {
-                log.warn("DeepAudit: ONNX Model NOT found at {}. AI detection will be disabled.", MODEL_PATH);
+                log.warn("DeepAudit: ONNX Model NOT found at {}. AI detection disabled.", modelPath);
             }
         } catch (Exception e) {
-            log.error("Failed to initialize AI model", e);
+            log.error("Failed to reload AI model", e);
         }
     }
     

@@ -14,6 +14,7 @@ export interface RiskProperties {
   blockThreshold: number;
   windowTtl: number;
   mlWeight: number;
+  modelPath?: string; // ONNX Model Path
 }
 
 // Backend Model: SysSensitiveTable

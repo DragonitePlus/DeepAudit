@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Form, InputNumber, Button, Slider, Tooltip, message, Spin, Row, Col, Typography, Popconfirm } from 'antd';
+import { Card, Form, InputNumber, Button, Slider, Tooltip, message, Spin, Row, Col, Typography, Popconfirm, Input } from 'antd';
 import { Info, Save, RotateCcw, Cpu } from 'lucide-react';
 import { riskConfigService } from '../services/api';
 import { RiskProperties } from '../types';
@@ -179,6 +179,21 @@ const AlgorithmConfig: React.FC = () => {
                 </Row>
               </Form.Item>
               
+              <Form.Item
+                name="modelPath"
+                label={
+                  <span className="flex items-center gap-1">
+                    模型路径 (ONNX)
+                    <Tooltip title="服务器上 ONNX 模型文件的绝对路径">
+                      <Info size={14} className="text-gray-400" />
+                    </Tooltip>
+                  </span>
+                }
+                rules={[{ required: true, message: '请输入模型路径' }]}
+              >
+                <Input placeholder="例如: D:/Code/DeepAudit/models/deep_audit_iso_forest.onnx" />
+              </Form.Item>
+
               <div className="bg-blue-50 p-4 rounded-lg mt-6 flex items-start gap-3">
                 <Cpu className="text-blue-500 mt-1" size={24} />
                 <div>

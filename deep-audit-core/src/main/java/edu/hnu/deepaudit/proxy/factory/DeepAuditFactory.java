@@ -64,11 +64,17 @@ public class DeepAuditFactory {
         this.riskStateMachine.setJedisPool(jedisPool);
         this.riskStateMachine.setConfig(config);
         this.riskStateMachine.setJdbcRepository(jdbcRepository);
-        this.riskStateMachine.init();
-
+        // Bind config update to model reload
         this.anomalyDetectionService = new AnomalyDetectionService();
         this.anomalyDetectionService.setJedisPool(jedisPool);
-        // this.anomalyDetectionService.setAiServiceUrl(config.getAiServiceUrl()); // Removed: Using ONNX local inference
+
+        this.riskStateMachine.setOnConfigUpdate(() -> {
+            this.anomalyDetectionService.reloadModel(config.getModelPath());
+        });
+        this.riskStateMachine.init();
+
+        // Initial load using config
+        this.anomalyDetectionService.reloadModel(config.getModelPath());
 
         this.dlpEngine = new DlpEngine();
 

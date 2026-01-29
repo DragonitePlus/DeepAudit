@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
+import redis.clients.jedis.JedisPubSub;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -30,11 +31,14 @@ public class RiskStateMachine {
     private JedisPool jedisPool;
     private DeepAuditConfig config;
     private JdbcRepository jdbcRepository;
+    // Callback to reload model when config changes
+    private Runnable onConfigUpdate; 
 
     private String luaScriptSha;
 
     private static final String PROFILE_KEY_PREFIX = "audit:risk:";
     private static final String WINDOW_KEY_PREFIX = "audit:window:";
+    private static final String CONFIG_CHANNEL = "deepaudit:config:update";
 
     public void setJedisPool(JedisPool jedisPool) {
         this.jedisPool = jedisPool;
@@ -47,9 +51,20 @@ public class RiskStateMachine {
     public void setJdbcRepository(JdbcRepository jdbcRepository) {
         this.jdbcRepository = jdbcRepository;
     }
+    
+    public void setOnConfigUpdate(Runnable onConfigUpdate) {
+        this.onConfigUpdate = onConfigUpdate;
+    }
 
     public void init() {
-        // Load Lua script
+        // 1. Load Lua script
+        loadLuaScript();
+        
+        // 2. Start Redis Subscriber for Config Updates
+        startConfigSubscriber();
+    }
+    
+    private void loadLuaScript() {
         try (InputStream is = getClass().getClassLoader().getResourceAsStream("scripts/risk_control.lua")) {
             if (is == null) {
                 log.error("Lua script not found at scripts/risk_control.lua");
@@ -65,6 +80,30 @@ public class RiskStateMachine {
         } catch (IOException e) {
             log.error("Failed to load Lua script", e);
         }
+    }
+    
+    private void startConfigSubscriber() {
+        new Thread(() -> {
+            while (true) {
+                try (Jedis jedis = jedisPool.getResource()) {
+                    jedis.subscribe(new JedisPubSub() {
+                        @Override
+                        public void onMessage(String channel, String message) {
+                            if (CONFIG_CHANNEL.equals(channel)) {
+                                log.info("Received config update: {}", message);
+                                boolean updated = config.updateFromJson(message);
+                                if (updated && onConfigUpdate != null) {
+                                    onConfigUpdate.run();
+                                }
+                            }
+                        }
+                    }, CONFIG_CHANNEL);
+                } catch (Exception e) {
+                    log.error("Redis Subscriber failed, retrying in 5s...", e);
+                    try { Thread.sleep(5000); } catch (InterruptedException ignored) {}
+                }
+            }
+        }, "DeepAudit-Config-Subscriber").start();
     }
 
     public String checkStatus(String userId, int currentRiskScore) {

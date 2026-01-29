@@ -33,6 +33,11 @@ public class RiskProperties {
      */
     private double mlWeight = 0.3;
 
+    /**
+     * ONNX Model Path
+     */
+    private String modelPath = "D:/Code/DeepAudit/models/deep_audit_iso_forest.onnx";
+
     public double getDecayRate() {
         return decayRate;
     }
@@ -71,5 +76,13 @@ public class RiskProperties {
 
     public void setMlWeight(double mlWeight) {
         this.mlWeight = mlWeight;
+    }
+
+    public String getModelPath() {
+        return modelPath;
+    }
+
+    public void setModelPath(String modelPath) {
+        this.modelPath = modelPath;
     }
 }

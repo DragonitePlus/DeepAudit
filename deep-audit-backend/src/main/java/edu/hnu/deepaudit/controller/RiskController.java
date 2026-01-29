@@ -6,7 +6,9 @@ import edu.hnu.deepaudit.config.RiskProperties;
 import edu.hnu.deepaudit.mapper.sys.SysUserRiskProfileMapper;
 import edu.hnu.deepaudit.model.SysUserRiskProfile;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.bind.annotation.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -21,6 +23,11 @@ public class RiskController {
     @Autowired
     private SysUserRiskProfileMapper sysUserRiskProfileMapper;
 
+    @Autowired
+    private StringRedisTemplate redisTemplate;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
     @GetMapping("/config")
     public RiskProperties getConfig() {
         return riskProperties;
@@ -28,11 +35,22 @@ public class RiskController {
 
     @PostMapping("/config")
     public String updateConfig(@RequestBody RiskProperties newConfig) {
+        // Update in-memory properties
         riskProperties.setDecayRate(newConfig.getDecayRate());
         riskProperties.setObservationThreshold(newConfig.getObservationThreshold());
         riskProperties.setBlockThreshold(newConfig.getBlockThreshold());
         riskProperties.setWindowTtl(newConfig.getWindowTtl());
         riskProperties.setMlWeight(newConfig.getMlWeight());
+        riskProperties.setModelPath(newConfig.getModelPath());
+        
+        // Publish update to Redis for Plugin
+        try {
+            String jsonConfig = objectMapper.writeValueAsString(riskProperties);
+            redisTemplate.convertAndSend("deepaudit:config:update", jsonConfig);
+        } catch (Exception e) {
+            return "Configuration updated locally, but failed to publish to Redis: " + e.getMessage();
+        }
+
         return "Risk configuration updated successfully";
     }
 
