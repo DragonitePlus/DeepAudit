@@ -22,9 +22,11 @@ public class JdbcRepository {
     }
 
     public void saveAuditLog(SysAuditLog logEntry) {
+        // Schema compliant INSERT
         String sql = "INSERT INTO sys_audit_log (trace_id, app_user_id, sql_template, table_names, risk_score, " +
-                "result_count, action_taken, create_time, client_ip, execution_time, extra_info) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                "result_count, action_taken, create_time, client_ip, execution_time, extra_info, " +
+                "feedback_status, sql_hash, affected_rows, error_code, client_app) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -39,7 +41,34 @@ public class JdbcRepository {
             ps.setObject(8, logEntry.getCreateTime());
             ps.setString(9, logEntry.getClientIp());
             ps.setObject(10, logEntry.getExecutionTime());
-            ps.setString(11, logEntry.getExtraInfo());
+            
+            // Enrich extra_info with AST stats for potential future use or debugging
+            String extraInfo = logEntry.getExtraInfo();
+            if (extraInfo == null || extraInfo.trim().isEmpty()) {
+                extraInfo = "{}";
+            }
+            // Robust JSON append
+            if (logEntry.getConditionCount() != null) {
+                String astJson = String.format("\"ast\": {\"cond\": %d, \"join\": %d, \"nest\": %d, \"true\": %b}", 
+                        logEntry.getConditionCount(), logEntry.getJoinCount(), logEntry.getNestedLevel(), logEntry.getHasAlwaysTrue());
+                
+                String trimmed = extraInfo.trim();
+                if ("{}".equals(trimmed)) {
+                    extraInfo = "{" + astJson + "}";
+                } else if (trimmed.endsWith("}")) {
+                     // Insert before the last '}'
+                     int lastBrace = extraInfo.lastIndexOf("}");
+                     extraInfo = extraInfo.substring(0, lastBrace) + ", " + astJson + "}";
+                }
+            }
+            ps.setString(11, extraInfo);
+            
+            // New Schema Columns
+            ps.setObject(12, logEntry.getFeedbackStatus() != null ? logEntry.getFeedbackStatus() : 0);
+            ps.setString(13, logEntry.getSqlHash());
+            ps.setObject(14, logEntry.getAffectedRows() != null ? logEntry.getAffectedRows() : 0);
+            ps.setObject(15, logEntry.getErrorCode() != null ? logEntry.getErrorCode() : 0);
+            ps.setString(16, logEntry.getClientApp());
             
             ps.executeUpdate();
         } catch (SQLException e) {

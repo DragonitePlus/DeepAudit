@@ -3,7 +3,8 @@ import {
   RiskProperties, 
   SysUserRiskProfile, 
   SysSensitiveTable, 
-  PageResult 
+  PageResult,
+  SysAuditLog
 } from '../types';
 
 const api = axios.create({
@@ -61,6 +62,16 @@ export const sensitiveTableService = {
 export const auditService = {
   getTrend: async () => {
     const response = await api.get<{ timeSlot: string; totalScore: number }[]>('/audit/trend');
+    return response.data;
+  },
+  getLogs: async (current: number = 1, size: number = 10) => {
+    const response = await api.get<PageResult<SysAuditLog>>('/audit/logs', {
+      params: { current, size },
+    });
+    return response.data;
+  },
+  submitFeedback: async (traceId: string, status: number) => {
+    const response = await api.post<string>('/audit/feedback', { traceId, status });
     return response.data;
   }
 };

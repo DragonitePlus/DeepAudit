@@ -25,6 +25,21 @@ export interface SysSensitiveTable {
   coefficient: number;
 }
 
+// Backend Model: SysAuditLog
+export interface SysAuditLog {
+  traceId: string;
+  appUserId: string;
+  sqlTemplate: string;
+  tableNames: string;
+  riskScore: number;
+  resultCount: number;
+  actionTaken: 'PASS' | 'BLOCK';
+  createTime: string;
+  clientIp: string;
+  executionTime: number;
+  feedbackStatus: number; // 0-Unmarked, 1-False Positive, 2-True Positive
+}
+
 // API Responses
 export interface PageResult<T> {
   records: T[];

@@ -5,6 +5,7 @@ import zhCN from 'antd/locale/zh_CN';
 import MainLayout from './layouts/MainLayout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import AuditLog from './pages/AuditLog';
 import UserRisk from './pages/UserRisk';
 import AlgorithmConfig from './pages/AlgorithmConfig';
 import SensitiveTables from './pages/SensitiveTables';
@@ -43,6 +44,7 @@ const App: React.FC = () => {
         >
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
+          <Route path="audit-logs" element={<AuditLog />} />
           <Route path="users" element={<UserRisk />} />
           <Route path="algorithms" element={<AlgorithmConfig />} />
           <Route path="sensitive-tables" element={<SensitiveTables />} />

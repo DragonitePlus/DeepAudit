@@ -29,13 +29,13 @@ public class SysAuditLog {
     /**
      * Result Set Row Count
      */
-    private Integer resultCount;
-    
+    private Long resultCount;
+
     /**
      * Action Taken (PASS/BLOCK)
      */
     private String actionTaken;
-    
+
     private LocalDateTime createTime;
 
     /**
@@ -53,8 +53,55 @@ public class SysAuditLog {
      */
     private String extraInfo;
 
+    /**
+     * Feedback Status: 0-Unmarked, 1-False Positive(Normal), 2-True Positive(Anomaly)
+     */
+    private Integer feedbackStatus;
+
+    // --- AST Features ---
+    private String sqlHash;
+    private Long affectedRows;
+    private Integer errorCode;
+    private String clientApp;
+
+    // Detailed AST stats
+    private Integer conditionCount;
+    private Integer joinCount;
+    private Integer nestedLevel;
+    private Boolean hasAlwaysTrue;
+
     public SysAuditLog() {
     }
+
+    // Getters and Setters
+    public Integer getFeedbackStatus() { return feedbackStatus; }
+    public void setFeedbackStatus(Integer feedbackStatus) { this.feedbackStatus = feedbackStatus; }
+
+    public String getSqlHash() { return sqlHash; }
+    public void setSqlHash(String sqlHash) { this.sqlHash = sqlHash; }
+
+    public Long getAffectedRows() { return affectedRows; }
+    public void setAffectedRows(Long affectedRows) { this.affectedRows = affectedRows; }
+
+    public Integer getErrorCode() { return errorCode; }
+    public void setErrorCode(Integer errorCode) { this.errorCode = errorCode; }
+
+    public String getClientApp() { return clientApp; }
+    public void setClientApp(String clientApp) { this.clientApp = clientApp; }
+
+    public Integer getConditionCount() { return conditionCount; }
+    public void setConditionCount(Integer conditionCount) { this.conditionCount = conditionCount; }
+
+    public Integer getJoinCount() { return joinCount; }
+    public void setJoinCount(Integer joinCount) { this.joinCount = joinCount; }
+
+    public Integer getNestedLevel() { return nestedLevel; }
+    public void setNestedLevel(Integer nestedLevel) { this.nestedLevel = nestedLevel; }
+
+    public void setResultCount(Long resultCount) { this.resultCount = resultCount; }
+
+    public Boolean getHasAlwaysTrue() { return hasAlwaysTrue; }
+    public void setHasAlwaysTrue(Boolean hasAlwaysTrue) { this.hasAlwaysTrue = hasAlwaysTrue; }
 
     public String getTraceId() {
         return traceId;
@@ -96,12 +143,8 @@ public class SysAuditLog {
         this.riskScore = riskScore;
     }
 
-    public Integer getResultCount() {
+    public Long getResultCount() {
         return resultCount;
-    }
-
-    public void setResultCount(Integer resultCount) {
-        this.resultCount = resultCount;
     }
 
     public String getActionTaken() {

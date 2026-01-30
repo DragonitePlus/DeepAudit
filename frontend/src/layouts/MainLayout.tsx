@@ -6,6 +6,7 @@ import {
   Users,
   Cpu,
   Database,
+  ShieldAlert,
   Settings,
   Menu as MenuIcon,
   LogOut,
@@ -35,6 +36,11 @@ const MainLayout: React.FC = () => {
       key: '/dashboard',
       icon: <LayoutDashboard size={20} />,
       label: '风险概览',
+    },
+    {
+      key: '/audit-logs',
+      icon: <ShieldAlert size={20} />,
+      label: '审计日志',
     },
     {
       key: '/users',

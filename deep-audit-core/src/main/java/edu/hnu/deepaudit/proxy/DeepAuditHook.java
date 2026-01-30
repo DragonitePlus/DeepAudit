@@ -1,6 +1,7 @@
 package edu.hnu.deepaudit.proxy;
 
 import edu.hnu.deepaudit.analysis.DlpEngine;
+import edu.hnu.deepaudit.analysis.SqlDeepAnalyzer;
 import edu.hnu.deepaudit.control.RiskStateMachine;
 import edu.hnu.deepaudit.model.SysAuditLog;
 import edu.hnu.deepaudit.model.dto.AuditLogFeatureDTO;
@@ -53,7 +54,8 @@ public class DeepAuditHook implements SQLExecutionHook {
 
             if ("BLOCK".equals(action)) {
                 // 3. 记录阻断日志
-                logAudit(userId, sql, 0, "BLOCK", "Risk Control: Access Denied", 0);
+                SqlDeepAnalyzer.SqlFeatures astFeatures = SqlDeepAnalyzer.analyze(sql);
+                logAudit(userId, sql, 0, "BLOCK", "Risk Control: Access Denied", 0, astFeatures, 0, 0, 1);
 
                 // 🔥🔥 关键修复：在抛出异常前，必须清理 ThreadLocal！🔥🔥
                 // 因为一旦抛出异常，finish 方法就不会被调用了！
@@ -79,24 +81,28 @@ public class DeepAuditHook implements SQLExecutionHook {
                 long duration = System.currentTimeMillis() - context.startTime;
                 
                 // 3. AI Anomaly Detection (Async) & DLP Analysis (Simulated)
-                // Since we don't have result set here, we simulate DLP or analyze SQL structure
                 int riskScore = dlpEngine.calculateRiskScore(null); // Placeholder
                 
-                // Construct Features for AI (Not needed for DTO anymore, direct pass)
-                // We use new detectRisk method directly
+                // AST Analysis
+                SqlDeepAnalyzer.SqlFeatures astFeatures = SqlDeepAnalyzer.analyze(context.sql);
+                
+                // AI Detection
                 int aiRiskScore = (int) anomalyDetectionService.detectRisk(
                     context.userId, 
                     LocalDateTime.now(), 
-                    0, // rowCount not available in hook yet
+                    0, // rowCount not available
+                    0, // affectedRows not available
                     duration, 
-                    context.sql
+                    0, // errorCode
+                    context.sql,
+                    astFeatures
                 );
                 
                 // Combine scores (max of DLP and AI)
                 int finalRiskScore = Math.max(riskScore, aiRiskScore);
                 
-                // 4. Log Audit
-                logAudit(context.userId, context.sql, duration, "PASS", null, finalRiskScore);
+                // 4. Log Audit with Features
+                logAudit(context.userId, context.sql, duration, "PASS", null, finalRiskScore, astFeatures, 0, 0, 0);
             }
         } finally {
             AUDIT_CONTEXT.remove();
@@ -109,14 +115,18 @@ public class DeepAuditHook implements SQLExecutionHook {
             AuditContext context = AUDIT_CONTEXT.get();
             if (context != null) {
                 long duration = System.currentTimeMillis() - context.startTime;
-                logAudit(context.userId, context.sql, duration, "PASS", "Error: " + e.getMessage(), 0);
+                // Still analyze AST for failure cases (might be injection attempts)
+                SqlDeepAnalyzer.SqlFeatures astFeatures = SqlDeepAnalyzer.analyze(context.sql);
+                
+                logAudit(context.userId, context.sql, duration, "PASS", "Error: " + e.getMessage(), 0, astFeatures, 0, 0, 1);
             }
         } finally {
             AUDIT_CONTEXT.remove();
         }
     }
 
-    private void logAudit(String userId, String sql, long duration, String action, String extraInfo, int riskScore) {
+    private void logAudit(String userId, String sql, long duration, String action, String extraInfo, int riskScore, 
+                          SqlDeepAnalyzer.SqlFeatures ast, long rowCount, long affectedRows, int errorCode) {
         // Use async thread or CompletableFuture to avoid blocking main SQL thread
         // JdbcRepository is thread-safe (uses HikariCP)
         new Thread(() -> {
@@ -130,7 +140,23 @@ public class DeepAuditHook implements SQLExecutionHook {
                 log.setActionTaken(action);
                 log.setCreateTime(LocalDateTime.now());
                 log.setExecutionTime(duration);
-                log.setExtraInfo(extraInfo != null ? extraInfo : "Proxy Audit");
+                // Initialize extraInfo as JSON object if null
+                log.setExtraInfo(extraInfo != null ? extraInfo : "{}");
+                
+                // AST Features
+                if (ast != null) {
+                    log.setConditionCount(ast.conditionCount);
+                    log.setJoinCount(ast.joinCount);
+                    log.setNestedLevel(ast.nestedLevel);
+                    log.setHasAlwaysTrue(ast.hasAlwaysTrueCondition);
+                    // Generate hash (simple md5 or hashCode)
+                    log.setSqlHash(String.valueOf(sql.hashCode())); 
+                }
+                
+                log.setResultCount((long) rowCount);
+                log.setAffectedRows((long) affectedRows);
+                log.setErrorCode(errorCode);
+                log.setClientApp("Unknown"); // Placeholder
                 
                 jdbcRepository.saveAuditLog(log);
             } catch (Exception ex) {

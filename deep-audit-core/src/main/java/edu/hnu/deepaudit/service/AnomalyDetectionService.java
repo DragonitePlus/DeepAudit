@@ -75,28 +75,36 @@ public class AnomalyDetectionService {
     /**
      * Synchronous Risk Detection using ONNX
      */
-    public double detectRisk(String userId, LocalDateTime eventTime, long rows, long timeMs, String sql) {
+    public double detectRisk(String userId, LocalDateTime eventTime, long rows, long affectedRows, long timeMs, 
+                             int errorCode, String sql, edu.hnu.deepaudit.analysis.SqlDeepAnalyzer.SqlFeatures astFeatures) {
         if (session == null) {
             return 0.0; // Fail-safe
         }
 
         try {
-            // 1. Simple SQL Feature Extraction (Mock implementation)
-            // Ideally, use a proper SQL parser or pass down parsed info
-            int sqlLen = sql.length();
-            int numTables = countOccurrences(sql.toLowerCase(), " from ") + countOccurrences(sql.toLowerCase(), " join ");
-            if (numTables == 0) numTables = 1;
-            int numJoins = countOccurrences(sql.toLowerCase(), " join ");
-            
-            // Mock freq (Real impl would query Redis sliding window)
+            // 1. Mock freq (Real impl would query Redis sliding window)
             int freq = 1; 
+            
+            // 2. Client App Risk (Placeholder, should come from connection context if available)
+            int clientAppRisk = 0;
+            
+            // 3. Error Code Risk
+            int errorCodeRisk = (errorCode > 0) ? 1 : 0;
+            
+            // 4. SQL Type Weight (Simple heuristic)
+            int sqlTypeWeight = 1;
+            String lowerSql = sql.toLowerCase();
+            if (lowerSql.contains("drop ") || lowerSql.contains("truncate ") || lowerSql.contains("grant ")) sqlTypeWeight = 5;
+            else if (lowerSql.contains("update ") || lowerSql.contains("delete ") || lowerSql.contains("insert ")) sqlTypeWeight = 3;
 
-            // 2. Feature Engineering (Java)
+            // 5. Feature Engineering (Java)
             float[] features = FeatureExtractor.extractFeatures(
-                eventTime, rows, timeMs, sqlLen, numTables, numJoins, freq
+                eventTime, rows, affectedRows, timeMs, freq, sqlTypeWeight,
+                astFeatures.conditionCount, astFeatures.joinCount, astFeatures.nestedLevel, astFeatures.hasAlwaysTrueCondition,
+                clientAppRisk, errorCodeRisk
             );
 
-            // 3. Create Tensor [1, 8]
+            // 6. Create Tensor [1, 13]
             long[] shape = new long[]{1, features.length};
             
             try (OnnxTensor tensor = OnnxTensor.createTensor(env, FloatBuffer.wrap(features), shape)) {
