@@ -1,15 +1,25 @@
 package edu.hnu.deepaudit.model;
 
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
+import org.springframework.data.annotation.Transient;
+
 import java.time.LocalDateTime;
 import java.util.Objects;
-
+@TableName("sys_audit_log")
 public class SysAuditLog {
+    @TableId
     private String traceId;
 
     /**
      * Application User ID (Identity Gap Solution)
      */
     private String appUserId;
+
+    /**
+     * 逻辑数据库名 (上下文隔离)
+     */
+    private String logicDbName;
 
     /**
      * Desensitized SQL Template
@@ -58,17 +68,11 @@ public class SysAuditLog {
      */
     private Integer feedbackStatus;
 
-    // --- AST Features ---
+    // Detailed AST stats
     private String sqlHash;
     private Long affectedRows;
     private Integer errorCode;
     private String clientApp;
-
-    // Detailed AST stats
-    private Integer conditionCount;
-    private Integer joinCount;
-    private Integer nestedLevel;
-    private Boolean hasAlwaysTrue;
 
     public SysAuditLog() {
     }
@@ -88,18 +92,6 @@ public class SysAuditLog {
 
     public String getClientApp() { return clientApp; }
     public void setClientApp(String clientApp) { this.clientApp = clientApp; }
-
-    public Integer getConditionCount() { return conditionCount; }
-    public void setConditionCount(Integer conditionCount) { this.conditionCount = conditionCount; }
-
-    public Integer getJoinCount() { return joinCount; }
-    public void setJoinCount(Integer joinCount) { this.joinCount = joinCount; }
-
-    public Integer getNestedLevel() { return nestedLevel; }
-    public void setNestedLevel(Integer nestedLevel) { this.nestedLevel = nestedLevel; }
-
-    public Boolean getHasAlwaysTrue() { return hasAlwaysTrue; }
-    public void setHasAlwaysTrue(Boolean hasAlwaysTrue) { this.hasAlwaysTrue = hasAlwaysTrue; }
 
     public void setResultCount(Long resultCount) { this.resultCount = resultCount; }
 
@@ -187,6 +179,14 @@ public class SysAuditLog {
         this.extraInfo = extraInfo;
     }
 
+    public String getLogicDbName() {
+        return logicDbName;
+    }
+
+    public void setLogicDbName(String logicDbName) {
+        this.logicDbName = logicDbName;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -207,7 +207,9 @@ public class SysAuditLog {
 
     @Override
     public int hashCode() {
-        return Objects.hash(traceId, appUserId, sqlTemplate, tableNames, riskScore, resultCount, actionTaken, createTime, clientIp, executionTime, extraInfo);
+        return Objects.hash(traceId, appUserId, logicDbName, sqlTemplate, tableNames, riskScore,  // 新增：logicDbName
+                resultCount, actionTaken, createTime, clientIp, executionTime, extraInfo,
+                feedbackStatus, sqlHash, affectedRows, errorCode, clientApp);  // 新增：补充所有字段
     }
 
     @Override
@@ -215,6 +217,7 @@ public class SysAuditLog {
         return "SysAuditLog{" +
                 "traceId='" + traceId + '\'' +
                 ", appUserId='" + appUserId + '\'' +
+                ", logicDbName='" + logicDbName + '\'' +  // 新增：包含logicDbName
                 ", sqlTemplate='" + sqlTemplate + '\'' +
                 ", tableNames='" + tableNames + '\'' +
                 ", riskScore=" + riskScore +
@@ -224,6 +227,11 @@ public class SysAuditLog {
                 ", clientIp='" + clientIp + '\'' +
                 ", executionTime=" + executionTime +
                 ", extraInfo='" + extraInfo + '\'' +
+                ", feedbackStatus=" + feedbackStatus +  // 新增：包含feedbackStatus
+                ", sqlHash='" + sqlHash + '\'' +  // 新增：包含sqlHash
+                ", affectedRows=" + affectedRows +  // 新增：包含affectedRows
+                ", errorCode=" + errorCode +  // 新增：包含errorCode
+                ", clientApp='" + clientApp + '\'' +  // 新增：包含clientApp
                 '}';
     }
 }
