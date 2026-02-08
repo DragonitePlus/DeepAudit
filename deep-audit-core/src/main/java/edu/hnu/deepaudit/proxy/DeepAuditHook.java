@@ -37,37 +37,21 @@ public class DeepAuditHook implements SQLExecutionHook {
     public void start(String dataSourceName, String sql, List<Object> parameters,
                       ConnectionProperties connectionProperties, boolean isTrunkThread) {
 
-        AUDIT_CONTEXT.remove(); // 防止之前的线程没清理干净
-
+        AUDIT_CONTEXT.remove();
         String userId = resolveUserId(sql);
-        if (userId == null) {
-            userId = "unknown";
-        }
-
-        // 1. 设置上下文
+        if (userId == null) userId = "unknown";
         AUDIT_CONTEXT.set(new AuditContext(userId, sql, System.currentTimeMillis()));
 
         try {
-            // 2. 风控检查
-            // 传入 0 分只是为了检查状态 (是否已在黑名单)
             String action = riskStateMachine.checkStatus(userId, 0);
-
             if ("BLOCK".equals(action)) {
-                // 3. 记录阻断日志
                 SqlDeepAnalyzer.SqlFeatures astFeatures = SqlDeepAnalyzer.analyze(sql);
-                logAudit(userId, sql, 0, "BLOCK", "Risk Control: Access Denied", 0, astFeatures, 0, 0, 1);
-
-                // 🔥🔥 关键修复：在抛出异常前，必须清理 ThreadLocal！🔥🔥
-                // 因为一旦抛出异常，finish 方法就不会被调用了！
+                String tableNames = String.join(",", astFeatures.tableNames);
+                logAudit(userId, sql, 0, "BLOCK", "Risk Control: Access Denied", 0, astFeatures, tableNames, 0, 0, 1);
                 AUDIT_CONTEXT.remove();
-
-                // 4. 阻断执行
                 throw new RuntimeException("DeepAudit Risk Control: Access Denied for user " + userId);
             }
-
         } catch (Exception e) {
-            // 双重保险：如果是 checkStatus 内部报错，也要清理
-            // 如果是上面抛出的 RuntimeException，也会走到这里，清理后再次抛出
             AUDIT_CONTEXT.remove();
             throw e;
         }
@@ -79,30 +63,32 @@ public class DeepAuditHook implements SQLExecutionHook {
             AuditContext context = AUDIT_CONTEXT.get();
             if (context != null) {
                 long duration = System.currentTimeMillis() - context.startTime;
-                
-                // 3. AI Anomaly Detection (Async) & DLP Analysis (Simulated)
-                int riskScore = dlpEngine.calculateRiskScore(null); // Placeholder
-                
-                // AST Analysis
+
+                // 1. AST Analysis
                 SqlDeepAnalyzer.SqlFeatures astFeatures = SqlDeepAnalyzer.analyze(context.sql);
-                
-                // AI Detection
+
+                // 2. DLP Analysis (敏感表检查) 🔥🔥
+                // 传入解析出的表名
+                int dlpRiskScore = dlpEngine.calculateRiskScore(astFeatures.tableNames);
+
+                // 3. AI Detection
                 int aiRiskScore = (int) anomalyDetectionService.detectRisk(
-                    context.userId, 
-                    LocalDateTime.now(), 
-                    0, // rowCount not available
-                    0, // affectedRows not available
-                    duration, 
-                    0, // errorCode
-                    context.sql,
-                    astFeatures
+                        context.userId, LocalDateTime.now(), 0, 0, duration, 0, context.sql, astFeatures
                 );
-                
-                // Combine scores (max of DLP and AI)
-                int finalRiskScore = Math.max(riskScore, aiRiskScore);
-                
-                // 4. Log Audit with Features
-                logAudit(context.userId, context.sql, duration, "PASS", null, finalRiskScore, astFeatures, 0, 0, 0);
+
+                // 4. Combine scores
+                int finalRiskScore = Math.max(dlpRiskScore, aiRiskScore);
+
+                System.out.println(String.format(
+                        "DeepAudit Report [User: %s] | SQL: %s | DLP Score: %d | AI Score: %d | Final Risk: %d",
+                        context.userId, context.sql, dlpRiskScore, aiRiskScore, finalRiskScore
+                ));
+
+                // 5. 构造表名字符串 (用于日志)
+                String tableNames = String.join(",", astFeatures.tableNames);
+                if (tableNames.isEmpty()) tableNames = "unknown";
+
+                logAudit(context.userId, context.sql, duration, "PASS", null, finalRiskScore, astFeatures, tableNames, 0, 0, 0);
             }
         } finally {
             AUDIT_CONTEXT.remove();
@@ -115,49 +101,57 @@ public class DeepAuditHook implements SQLExecutionHook {
             AuditContext context = AUDIT_CONTEXT.get();
             if (context != null) {
                 long duration = System.currentTimeMillis() - context.startTime;
-                // Still analyze AST for failure cases (might be injection attempts)
-                SqlDeepAnalyzer.SqlFeatures astFeatures = SqlDeepAnalyzer.analyze(context.sql);
-                
-                logAudit(context.userId, context.sql, duration, "PASS", "Error: " + e.getMessage(), 0, astFeatures, 0, 0, 1);
+
+                // 尝试解析表名（即使失败了，AST 信息也可能部分有用）
+                SqlDeepAnalyzer.SqlFeatures astFeatures = null;
+                String tableNames = "unknown";
+
+                try {
+                    astFeatures = SqlDeepAnalyzer.analyze(context.sql);
+                    if (astFeatures != null && astFeatures.tableNames != null && !astFeatures.tableNames.isEmpty()) {
+                        tableNames = String.join(",", astFeatures.tableNames);
+                    }
+                } catch (Exception ex) {
+                    // 解析失败忽略
+                }
+
+                // 修正参数：第8个参数传 tableNames (String)，而不是 0
+                // logAudit(userId, sql, duration, action, extraInfo, riskScore, ast, tableNames, rowCount, affectedRows, errorCode)
+                logAudit(context.userId, context.sql, duration, "PASS", "Error: " + e.getMessage(), 0,
+                        astFeatures, tableNames, 0, 0, 1);
             }
         } finally {
             AUDIT_CONTEXT.remove();
         }
     }
 
-    private void logAudit(String userId, String sql, long duration, String action, String extraInfo, int riskScore, 
-                          SqlDeepAnalyzer.SqlFeatures ast, long rowCount, long affectedRows, int errorCode) {
-        // Use async thread or CompletableFuture to avoid blocking main SQL thread
-        // JdbcRepository is thread-safe (uses HikariCP)
+    private void logAudit(String userId, String sql, long duration, String action, String extraInfo, int riskScore,
+                          SqlDeepAnalyzer.SqlFeatures ast, String tableNames, long rowCount, long affectedRows, int errorCode) {
         new Thread(() -> {
             try {
                 SysAuditLog log = new SysAuditLog();
                 log.setTraceId(UUID.randomUUID().toString());
                 log.setAppUserId(userId);
                 log.setSqlTemplate(sql);
-                log.setTableNames("unknown"); 
+                log.setTableNames(tableNames); // 🔥 设置解析出的表名
                 log.setRiskScore(riskScore);
+                // ... (其他设置保持不变)
                 log.setActionTaken(action);
                 log.setCreateTime(LocalDateTime.now());
                 log.setExecutionTime(duration);
-                // Initialize extraInfo as JSON object if null
                 log.setExtraInfo(extraInfo != null ? extraInfo : "{}");
-                
-                // AST Features
                 if (ast != null) {
                     log.setConditionCount(ast.conditionCount);
                     log.setJoinCount(ast.joinCount);
                     log.setNestedLevel(ast.nestedLevel);
                     log.setHasAlwaysTrue(ast.hasAlwaysTrueCondition);
-                    // Generate hash (simple md5 or hashCode)
-                    log.setSqlHash(String.valueOf(sql.hashCode())); 
+                    log.setSqlHash(String.valueOf(sql.hashCode()));
                 }
-                
-                log.setResultCount((long) rowCount);
-                log.setAffectedRows((long) affectedRows);
+                log.setResultCount(rowCount);
+                log.setAffectedRows(affectedRows);
                 log.setErrorCode(errorCode);
-                log.setClientApp("Unknown"); // Placeholder
-                
+                log.setClientApp("Unknown");
+
                 jdbcRepository.saveAuditLog(log);
             } catch (Exception ex) {
                 System.err.println("DeepAudit: Failed to save audit log: " + ex.getMessage());

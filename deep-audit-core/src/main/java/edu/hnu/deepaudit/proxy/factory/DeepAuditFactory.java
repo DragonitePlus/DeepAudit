@@ -29,7 +29,7 @@ public class DeepAuditFactory {
     private final JdbcRepository jdbcRepository;
     private final RiskStateMachine riskStateMachine;
     private final AnomalyDetectionService anomalyDetectionService;
-    private final DlpEngine dlpEngine;
+    private DlpEngine dlpEngine;
 
     private DeepAuditFactory() {
         log.info("Initializing DeepAuditFactory...");
@@ -59,24 +59,30 @@ public class DeepAuditFactory {
         // 4. Init Repository
         this.jdbcRepository = new JdbcRepository(dataSource);
 
-        // 5. Init Services
+        this.dlpEngine = new DlpEngine();
+        try {
+            this.dlpEngine.setSensitiveTables(this.jdbcRepository.getAllSensitiveTables());
+        } catch (Exception e) {
+            log.error("Failed to load initial sensitive tables", e);
+        }
+
+        this.anomalyDetectionService = new AnomalyDetectionService();
+        this.anomalyDetectionService.setJedisPool(jedisPool);
+
+        // 5. Init Risk State Machine & Callback
         this.riskStateMachine = new RiskStateMachine();
         this.riskStateMachine.setJedisPool(jedisPool);
         this.riskStateMachine.setConfig(config);
         this.riskStateMachine.setJdbcRepository(jdbcRepository);
-        // Bind config update to model reload
-        this.anomalyDetectionService = new AnomalyDetectionService();
-        this.anomalyDetectionService.setJedisPool(jedisPool);
 
         this.riskStateMachine.setOnConfigUpdate(() -> {
+            log.info("Config update detected, reloading components...");
             this.anomalyDetectionService.reloadModel(config.getModelPath());
+            this.dlpEngine.setSensitiveTables(this.jdbcRepository.getAllSensitiveTables());
         });
+
         this.riskStateMachine.init();
-
-        // Initial load using config
         this.anomalyDetectionService.reloadModel(config.getModelPath());
-
-        this.dlpEngine = new DlpEngine();
 
         log.info("DeepAuditFactory initialized successfully.");
     }

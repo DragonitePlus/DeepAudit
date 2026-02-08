@@ -2,12 +2,15 @@ package edu.hnu.deepaudit.persistence;
 
 import edu.hnu.deepaudit.model.SysAuditLog;
 import edu.hnu.deepaudit.model.SysUserRiskProfile;
+import edu.hnu.deepaudit.model.SysSensitiveTable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.sql.DataSource;
 import java.sql.*;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * JDBC Repository for handling DB operations without MyBatis/Spring
@@ -19,6 +22,31 @@ public class JdbcRepository {
 
     public JdbcRepository(DataSource dataSource) {
         this.dataSource = dataSource;
+    }
+
+    /**
+     * 加载所有敏感表配置
+     */
+    public List<SysSensitiveTable> getAllSensitiveTables() {
+        List<SysSensitiveTable> list = new ArrayList<>();
+        String sql = "SELECT * FROM sys_sensitive_table";
+
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+
+            while (rs.next()) {
+                SysSensitiveTable table = new SysSensitiveTable();
+                table.setId(rs.getLong("id"));
+                table.setTableName(rs.getString("table_name"));
+                table.setSensitivityLevel(rs.getInt("sensitivity_level"));
+                table.setCoefficient(rs.getDouble("coefficient"));
+                list.add(table);
+            }
+        } catch (SQLException e) {
+            log.error("Failed to load sensitive tables: {}", e.getMessage());
+        }
+        return list;
     }
 
     public void saveAuditLog(SysAuditLog logEntry) {
