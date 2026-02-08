@@ -47,7 +47,7 @@ public class DeepAuditHook implements SQLExecutionHook {
             if ("BLOCK".equals(action)) {
                 SqlDeepAnalyzer.SqlFeatures astFeatures = SqlDeepAnalyzer.analyze(sql);
                 String tableNames = String.join(",", astFeatures.tableNames);
-                logAudit(userId, sql, 0, "BLOCK", "Risk Control: Access Denied", 0, astFeatures, tableNames, 0, 0, 1);
+                logAudit(userId, sql, "BLOCK", "", 0, astFeatures, tableNames);
                 AUDIT_CONTEXT.remove();
                 throw new RuntimeException("DeepAudit Risk Control: Access Denied for user " + userId);
             }
@@ -73,12 +73,12 @@ public class DeepAuditHook implements SQLExecutionHook {
 
                 // 3. AI Detection
                 int aiRiskScore = (int) anomalyDetectionService.detectRisk(
-                        context.userId, LocalDateTime.now(), 0, 0, duration, 0, context.sql, astFeatures
+                        context.userId, LocalDateTime.now(), context.sql, astFeatures
                 );
 
                 // 4. Combine scores
                 int finalRiskScore = Math.max(dlpRiskScore, aiRiskScore);
-
+                
                 System.out.println(String.format(
                         "DeepAudit Report [User: %s] | SQL: %s | DLP Score: %d | AI Score: %d | Final Risk: %d",
                         context.userId, context.sql, dlpRiskScore, aiRiskScore, finalRiskScore
@@ -88,7 +88,7 @@ public class DeepAuditHook implements SQLExecutionHook {
                 String tableNames = String.join(",", astFeatures.tableNames);
                 if (tableNames.isEmpty()) tableNames = "unknown";
 
-                logAudit(context.userId, context.sql, duration, "PASS", null, finalRiskScore, astFeatures, tableNames, 0, 0, 0);
+                logAudit(context.userId, context.sql, "PASS", null, finalRiskScore, astFeatures, tableNames);
             }
         } finally {
             AUDIT_CONTEXT.remove();
@@ -100,8 +100,6 @@ public class DeepAuditHook implements SQLExecutionHook {
         try {
             AuditContext context = AUDIT_CONTEXT.get();
             if (context != null) {
-                long duration = System.currentTimeMillis() - context.startTime;
-
                 // 尝试解析表名（即使失败了，AST 信息也可能部分有用）
                 SqlDeepAnalyzer.SqlFeatures astFeatures = null;
                 String tableNames = "unknown";
@@ -115,18 +113,17 @@ public class DeepAuditHook implements SQLExecutionHook {
                     // 解析失败忽略
                 }
 
-                // 修正参数：第8个参数传 tableNames (String)，而不是 0
-                // logAudit(userId, sql, duration, action, extraInfo, riskScore, ast, tableNames, rowCount, affectedRows, errorCode)
-                logAudit(context.userId, context.sql, duration, "PASS", "Error: " + e.getMessage(), 0,
-                        astFeatures, tableNames, 0, 0, 1);
+                // 修正参数：logAudit(userId, sql, action, extraInfo, riskScore, ast, tableNames)
+                logAudit(context.userId, context.sql, "PASS", "Error: " + e.getMessage(), 0,
+                        astFeatures, tableNames);
             }
         } finally {
             AUDIT_CONTEXT.remove();
         }
     }
 
-    private void logAudit(String userId, String sql, long duration, String action, String extraInfo, int riskScore,
-                          SqlDeepAnalyzer.SqlFeatures ast, String tableNames, long rowCount, long affectedRows, int errorCode) {
+    private void logAudit(String userId, String sql, String action, String extraInfo, int riskScore,
+                          SqlDeepAnalyzer.SqlFeatures ast, String tableNames) {
         new Thread(() -> {
             try {
                 SysAuditLog log = new SysAuditLog();
@@ -138,7 +135,6 @@ public class DeepAuditHook implements SQLExecutionHook {
                 // ... (其他设置保持不变)
                 log.setActionTaken(action);
                 log.setCreateTime(LocalDateTime.now());
-                log.setExecutionTime(duration);
                 log.setExtraInfo(extraInfo != null ? extraInfo : "{}");
                 if (ast != null) {
                     log.setConditionCount(ast.conditionCount);
@@ -147,11 +143,7 @@ public class DeepAuditHook implements SQLExecutionHook {
                     log.setHasAlwaysTrue(ast.hasAlwaysTrueCondition);
                     log.setSqlHash(String.valueOf(sql.hashCode()));
                 }
-                log.setResultCount(rowCount);
-                log.setAffectedRows(affectedRows);
-                log.setErrorCode(errorCode);
-                log.setClientApp("Unknown");
-
+                
                 jdbcRepository.saveAuditLog(log);
             } catch (Exception ex) {
                 System.err.println("DeepAudit: Failed to save audit log: " + ex.getMessage());

@@ -27,26 +27,11 @@ public class SysAuditLog {
     private Integer riskScore;
     
     /**
-     * Result Set Row Count
-     */
-    private Long resultCount;
-
-    /**
      * Action Taken (PASS/BLOCK)
      */
     private String actionTaken;
 
     private LocalDateTime createTime;
-
-    /**
-     * Client IP Address
-     */
-    private String clientIp;
-
-    /**
-     * SQL Execution Time (ms)
-     */
-    private Long executionTime;
 
     /**
      * JSON/Text for dynamic extension data
@@ -58,12 +43,9 @@ public class SysAuditLog {
      */
     private Integer feedbackStatus;
 
-    // --- AST Features ---
+    // --- AST Features (Stored in extraInfo JSON, not DB columns) ---
     private String sqlHash;
-    private Long affectedRows;
-    private Integer errorCode;
-    private String clientApp;
-
+    
     // Detailed AST stats
     private Integer conditionCount;
     private Integer joinCount;
@@ -80,15 +62,6 @@ public class SysAuditLog {
     public String getSqlHash() { return sqlHash; }
     public void setSqlHash(String sqlHash) { this.sqlHash = sqlHash; }
 
-    public Long getAffectedRows() { return affectedRows; }
-    public void setAffectedRows(Long affectedRows) { this.affectedRows = affectedRows; }
-
-    public Integer getErrorCode() { return errorCode; }
-    public void setErrorCode(Integer errorCode) { this.errorCode = errorCode; }
-
-    public String getClientApp() { return clientApp; }
-    public void setClientApp(String clientApp) { this.clientApp = clientApp; }
-
     public Integer getConditionCount() { return conditionCount; }
     public void setConditionCount(Integer conditionCount) { this.conditionCount = conditionCount; }
 
@@ -98,11 +71,9 @@ public class SysAuditLog {
     public Integer getNestedLevel() { return nestedLevel; }
     public void setNestedLevel(Integer nestedLevel) { this.nestedLevel = nestedLevel; }
 
-    public void setResultCount(Long resultCount) { this.resultCount = resultCount; }
-
     public Boolean getHasAlwaysTrue() { return hasAlwaysTrue; }
     public void setHasAlwaysTrue(Boolean hasAlwaysTrue) { this.hasAlwaysTrue = hasAlwaysTrue; }
-
+    
     public String getTraceId() {
         return traceId;
     }
@@ -143,10 +114,6 @@ public class SysAuditLog {
         this.riskScore = riskScore;
     }
 
-    public Long getResultCount() {
-        return resultCount;
-    }
-
     public String getActionTaken() {
         return actionTaken;
     }
@@ -161,22 +128,6 @@ public class SysAuditLog {
 
     public void setCreateTime(LocalDateTime createTime) {
         this.createTime = createTime;
-    }
-
-    public String getClientIp() {
-        return clientIp;
-    }
-
-    public void setClientIp(String clientIp) {
-        this.clientIp = clientIp;
-    }
-
-    public Long getExecutionTime() {
-        return executionTime;
-    }
-
-    public void setExecutionTime(Long executionTime) {
-        this.executionTime = executionTime;
     }
 
     public String getExtraInfo() {
@@ -197,17 +148,14 @@ public class SysAuditLog {
                 Objects.equals(sqlTemplate, that.sqlTemplate) &&
                 Objects.equals(tableNames, that.tableNames) &&
                 Objects.equals(riskScore, that.riskScore) &&
-                Objects.equals(resultCount, that.resultCount) &&
                 Objects.equals(actionTaken, that.actionTaken) &&
                 Objects.equals(createTime, that.createTime) &&
-                Objects.equals(clientIp, that.clientIp) &&
-                Objects.equals(executionTime, that.executionTime) &&
                 Objects.equals(extraInfo, that.extraInfo);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(traceId, appUserId, sqlTemplate, tableNames, riskScore, resultCount, actionTaken, createTime, clientIp, executionTime, extraInfo);
+        return Objects.hash(traceId, appUserId, sqlTemplate, tableNames, riskScore, actionTaken, createTime, extraInfo);
     }
 
     @Override
@@ -217,12 +165,9 @@ public class SysAuditLog {
                 ", appUserId='" + appUserId + '\'' +
                 ", sqlTemplate='" + sqlTemplate + '\'' +
                 ", tableNames='" + tableNames + '\'' +
-                ", riskScore=" + riskScore +
-                ", resultCount=" + resultCount +
+                ", riskScore=" + riskScore + '\'' +
                 ", actionTaken='" + actionTaken + '\'' +
-                ", createTime=" + createTime +
-                ", clientIp='" + clientIp + '\'' +
-                ", executionTime=" + executionTime +
+                ", createTime=" + createTime + '\'' +
                 ", extraInfo='" + extraInfo + '\'' +
                 '}';
     }

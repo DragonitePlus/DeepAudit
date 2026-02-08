@@ -75,51 +75,56 @@ public class AnomalyDetectionService {
     /**
      * Synchronous Risk Detection using ONNX
      */
-    public double detectRisk(String userId, LocalDateTime eventTime, long rows, long affectedRows, long timeMs, 
-                             int errorCode, String sql, edu.hnu.deepaudit.analysis.SqlDeepAnalyzer.SqlFeatures astFeatures) {
+    public double detectRisk(String userId, LocalDateTime eventTime, String sql, edu.hnu.deepaudit.analysis.SqlDeepAnalyzer.SqlFeatures astFeatures) {
         if (session == null) {
             return 0.0; // Fail-safe
         }
 
         try {
-            // 1. Mock freq (Real impl would query Redis sliding window)
-            int freq = 1; 
+            // 1. Get Real Frequency from Redis
+            int freq = 1;
+            if (jedisPool != null) {
+                try (Jedis jedis = jedisPool.getResource()) {
+                    // Simple sliding window counter: key by minute
+                    long currentMinute = System.currentTimeMillis() / 60000;
+                    String key = "freq:" + userId + ":" + currentMinute;
+                    freq = (int) jedis.incr(key);
+                    if (freq == 1) {
+                        jedis.expire(key, 60);
+                    }
+                } catch (Exception e) {
+                    log.warn("Redis freq check failed: {}", e.getMessage());
+                }
+            }
             
-            // 2. Client App Risk (Placeholder, should come from connection context if available)
-            int clientAppRisk = 0;
-            
-            // 3. Error Code Risk
-            int errorCodeRisk = (errorCode > 0) ? 1 : 0;
-            
-            // 4. SQL Type Weight (Simple heuristic)
+            // 2. SQL Type Weight (Simple heuristic)
             int sqlTypeWeight = 1;
             String lowerSql = sql.toLowerCase();
             if (lowerSql.contains("drop ") || lowerSql.contains("truncate ") || lowerSql.contains("grant ")) sqlTypeWeight = 5;
             else if (lowerSql.contains("update ") || lowerSql.contains("delete ") || lowerSql.contains("insert ")) sqlTypeWeight = 3;
 
-            // 5. Feature Engineering (Java)
+            // 3. Feature Engineering (Java) - 8 Dimensions
             float[] features = FeatureExtractor.extractFeatures(
-                eventTime, rows, affectedRows, timeMs, freq, sqlTypeWeight,
-                astFeatures.conditionCount, astFeatures.joinCount, astFeatures.nestedLevel, astFeatures.hasAlwaysTrueCondition,
-                clientAppRisk, errorCodeRisk
+                eventTime, freq, sqlTypeWeight,
+                astFeatures.conditionCount, astFeatures.joinCount, astFeatures.nestedLevel, astFeatures.hasAlwaysTrueCondition
             );
 
-            // 6. Create Tensor [1, 13]
+            // 4. Create Tensor [1, 8]
             long[] shape = new long[]{1, features.length};
             
             try (OnnxTensor tensor = OnnxTensor.createTensor(env, FloatBuffer.wrap(features), shape)) {
                 
-                // 4. Run Inference
+                // 5. Run Inference
                 // Input name 'float_input' must match Python export script
                 OrtSession.Result result = session.run(Collections.singletonMap("float_input", tensor));
                 
-                // 5. Get Scores
+                // 6. Get Scores
                 // IsolationForest ONNX output: index 0 = label, index 1 = scores (decision function)
                 // We use score for granular risk
                 float[][] scores = (float[][]) result.get(1).getValue();
                 float rawScore = scores[0][0];
 
-                // 6. Score Normalization
+                // 7. Score Normalization
                 // Isolation Forest decision_function: 
                 // positive -> normal, negative -> anomaly
                 // We convert negative scores to positive risk (0-100)

@@ -70,8 +70,8 @@ def generate_mock_data(n_samples=50000):
     exec_time_normal = np.random.lognormal(mean=3, sigma=1.0, size=n_normal).astype(int) # ms
     freq_normal = np.random.poisson(lam=5, size=n_normal)
 
-    # 7. 错误码 (0=成功)
-    error_risk_normal = np.zeros(n_normal)
+    # 7. 错误码 (0=成功) - 已移除
+    # error_risk_normal = np.zeros(n_normal)
 
     # 生成正常数据集
     for i in range(n_normal):
@@ -83,9 +83,9 @@ def generate_mock_data(n_samples=50000):
 
         data.append({
             'timestamp': dt,
-            'row_count': rows_normal[i],
-            'affected_rows': int(affected_normal[i]),
-            'exec_time': exec_time_normal[i],
+            # 'row_count': rows_normal[i], # 移除
+            # 'affected_rows': int(affected_normal[i]), # 移除
+            # 'exec_time': exec_time_normal[i], # 移除
             'sql_type_weight': w,
             'freq_1min': freq_normal[i],
             # AST 特征
@@ -93,9 +93,9 @@ def generate_mock_data(n_samples=50000):
             'join_count': join_count_normal[i],
             'nested_level': int(nested_normal[i]),
             'has_always_true': int(always_true_normal[i]),
-            # 环境特征
-            'client_app_risk': int(client_risk_normal[i]),
-            'error_code_risk': int(error_risk_normal[i]),
+            # 环境特征 - 已移除
+            # 'client_app_risk': int(client_risk_normal[i]),
+            # 'error_code_risk': int(error_risk_normal[i]),
             'label': 0
         })
 
@@ -105,13 +105,13 @@ def generate_mock_data(n_samples=50000):
     # -------------------------------------------------------------------------
 
     # 场景1: SQL 注入 (Boolean Injection)
-    # 特征: 包含 1=1, 高条件数, 可能有错误
+    # 特征: 包含 1=1, 高条件数
     for _ in range(int(n_anomaly * 0.2)):
         data.append({
             'timestamp': base_time,
-            'row_count': random.randint(0, 100),
-            'affected_rows': 0,
-            'exec_time': random.randint(10, 200),
+            # 'row_count': random.randint(0, 100),
+            # 'affected_rows': 0,
+            # 'exec_time': random.randint(10, 200),
             'sql_type_weight': 1,
             'freq_1min': random.randint(10, 50),
             # AST 异常
@@ -119,84 +119,84 @@ def generate_mock_data(n_samples=50000):
             'join_count': 0,
             'nested_level': 0,
             'has_always_true': 1, # 🔥 致命特征 (1=1)
-            'client_app_risk': 1, # 可能使用 sqlmap
-            'error_code_risk': random.choice([0, 1]),
+            # 'client_app_risk': 1,
+            # 'error_code_risk': random.choice([0, 1]),
             'label': 1
         })
 
-    # 场景2: 拖库 (Data Exfiltration)
-    # 特征: 巨大 row_count, 深夜访问
+    # 场景2: 拖库 (Data Exfiltration) - 现已无法通过返回行数检测，只能靠频率和时间
+    # 特征: 深夜访问
     for _ in range(int(n_anomaly * 0.2)):
         data.append({
             'timestamp': base_time.replace(hour=3), # 深夜
-            'row_count': np.random.randint(50000, 1000000), # 🔥 拖库
-            'affected_rows': 0,
-            'exec_time': np.random.randint(5000, 60000),
+            # 'row_count': np.random.randint(50000, 1000000),
+            # 'affected_rows': 0,
+            # 'exec_time': np.random.randint(5000, 60000),
             'sql_type_weight': 1,
             'freq_1min': random.randint(1, 5),
             'condition_count': 1,
             'join_count': 0,
             'nested_level': 0,
             'has_always_true': 0,
-            'client_app_risk': 0,
-            'error_code_risk': 0,
+            # 'client_app_risk': 0,
+            # 'error_code_risk': 0,
             'label': 1
         })
 
     # 场景3: 恶意删改 (Destructive Operation)
-    # 特征: 巨大 affected_rows, 高权重类型(DDL/DML)
+    # 特征: 高权重类型(DDL/DML)
     for _ in range(int(n_anomaly * 0.2)):
         data.append({
             'timestamp': base_time,
-            'row_count': 0,
-            'affected_rows': np.random.randint(1000, 50000), # 🔥 删库
-            'exec_time': np.random.randint(1000, 10000),
+            # 'row_count': 0,
+            # 'affected_rows': np.random.randint(1000, 50000),
+            # 'exec_time': np.random.randint(1000, 10000),
             'sql_type_weight': 5, # DDL/高危
             'freq_1min': random.randint(1, 5),
             'condition_count': 1,
             'join_count': 0,
             'nested_level': 0,
             'has_always_true': 0,
-            'client_app_risk': 0,
-            'error_code_risk': 0,
+            # 'client_app_risk': 0,
+            # 'error_code_risk': 0,
             'label': 1
         })
 
-    # 场景4: 慢查询 DoS (Denial of Service)
-    # 特征: 极高 exec_time, 高 join_count, 高嵌套
+    # 场景4: 慢查询 DoS (Denial of Service) - 无法通过时间检测，只能靠 AST 复杂度
+    # 特征: 高 join_count, 高嵌套
     for _ in range(int(n_anomaly * 0.2)):
         data.append({
             'timestamp': base_time,
-            'row_count': 100,
-            'affected_rows': 0,
-            'exec_time': np.random.randint(30000, 100000), # 🔥 30s+
+            # 'row_count': 100,
+            # 'affected_rows': 0,
+            # 'exec_time': np.random.randint(30000, 100000),
             'sql_type_weight': 1,
             'freq_1min': random.randint(1, 5),
             'condition_count': random.randint(5, 20),
             'join_count': random.randint(5, 10), # 🔥 多表关联
             'nested_level': random.randint(2, 5), # 🔥 嵌套查询
             'has_always_true': 0,
-            'client_app_risk': 0,
-            'error_code_risk': 0,
+            # 'client_app_risk': 0,
+            # 'error_code_risk': 0,
             'label': 1
         })
 
     # 场景5: 暴力探测 (Brute Force / Scanning)
-    # 特征: 高频, 高错误率, 脚本客户端
+    # 特征: 高频
     for _ in range(int(n_anomaly * 0.2)):
         data.append({
             'timestamp': base_time,
-            'row_count': 0,
-            'affected_rows': 0,
-            'exec_time': random.randint(1, 10),
+            # 'row_count': 0,
+            # 'affected_rows': 0,
+            # 'exec_time': random.randint(1, 10),
             'sql_type_weight': 1,
             'freq_1min': np.random.randint(100, 500), # 🔥 极高频
             'condition_count': 0,
             'join_count': 0,
             'nested_level': 0,
             'has_always_true': 0,
-            'client_app_risk': 1, # 🔥 脚本工具
-            'error_code_risk': 1, # 🔥 频繁报错
+            # 'client_app_risk': 1,
+            # 'error_code_risk': 1,
             'label': 1
         })
 
@@ -224,9 +224,9 @@ def fetch_real_data_from_db():
         engine = create_engine(DB_CONNECTION_STR)
 
         # 只读取人工标记为"正常"(feedback_status=1)的数据作为正样本
+        # 移除已废弃列的读取
         query = """
-        SELECT create_time, result_count, affected_rows, execution_time, 
-               error_code, sql_template, app_user_id, client_app, action_taken
+        SELECT create_time, sql_template, app_user_id, action_taken, extra_info
         FROM sys_audit_log
         WHERE feedback_status = 1
         LIMIT 10000
@@ -241,26 +241,30 @@ def fetch_real_data_from_db():
 
         # 字段映射与填充
         df['timestamp'] = pd.to_datetime(df['create_time'])
-        df['row_count'] = df['result_count'].fillna(0)
-        df['affected_rows'] = df['affected_rows'].fillna(0)
-        df['exec_time'] = df['execution_time'].fillna(0)
 
-        # 解析 SQL 特征 (模拟 Java 端的 AST 解析)
-        feats = df['sql_template'].apply(extract_sql_features_simple)
+        # 解析 AST 特征 (优先从 extra_info JSON 解析)
+        def parse_ast_from_extra(row):
+            extra = row['extra_info']
+            # Default values
+            cond, join, nested, always_true = 0, 0, 0, 0
+            
+            try:
+                if extra and extra.strip() and extra.strip() != '{}':
+                    data = json.loads(extra)
+                    if 'ast' in data:
+                        ast = data['ast']
+                        return ast.get('cond', 0), ast.get('join', 0), ast.get('nest', 0), 1 if ast.get('true') else 0
+            except:
+                pass
+            
+            # Fallback: 正则解析 (用于旧数据或解析失败)
+            return extract_sql_features_simple(row['sql_template'])
+
+        feats = df.apply(parse_ast_from_extra, axis=1)
         df['condition_count'] = [x[0] for x in feats]
         df['join_count'] = [x[1] for x in feats]
         df['nested_level'] = [x[2] for x in feats]
         df['has_always_true'] = [x[3] for x in feats]
-
-        # 解析客户端风险 (简单规则: python/curl/sqlmap 视为高危)
-        def get_client_risk(app):
-            app = str(app).lower()
-            if 'python' in app or 'curl' in app or 'sqlmap' in app: return 1
-            return 0
-        df['client_app_risk'] = df['client_app'].apply(get_client_risk)
-
-        # 错误码风险
-        df['error_code_risk'] = df['error_code'].apply(lambda x: 1 if x and x > 0 else 0)
 
         # SQL 类型权重
         def get_type_weight(sql):
@@ -291,28 +295,22 @@ def preprocess_features(df):
     df['hour_of_day'] = df['timestamp'].dt.hour
     df['is_workday'] = df['timestamp'].dt.dayofweek.apply(lambda x: 1 if x < 5 else 0)
 
-    # 2. 量级特征对数化 (Log Transform)
-    df['log_row_count'] = np.log1p(df['row_count'])
-    df['log_affected_rows'] = np.log1p(df['affected_rows'])
-    df['log_exec_time'] = np.log1p(df['exec_time'])
+    # 2. 量级特征对数化 (已移除)
+    # df['log_row_count'] = np.log1p(df['row_count'])
+    # df['log_affected_rows'] = np.log1p(df['affected_rows'])
+    # df['log_exec_time'] = np.log1p(df['exec_time'])
 
-    # 3. 选定最终特征列 (共 13 个特征，与 Java FeatureExtractor 必须一致)
+    # 3. 选定最终特征列 (共 8 个实时特征)
     feature_cols = [
         'hour_of_day',
         'is_workday',
-        'log_row_count',
-        'log_affected_rows',
-        'log_exec_time',
         'freq_1min',
         'sql_type_weight',
         # AST 特征
         'condition_count',
         'join_count',
         'nested_level',
-        'has_always_true',
-        # 环境特征
-        'client_app_risk',
-        'error_code_risk'
+        'has_always_true'
     ]
 
     return df[feature_cols].fillna(0)

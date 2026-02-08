@@ -52,9 +52,9 @@ public class JdbcRepository {
     public void saveAuditLog(SysAuditLog logEntry) {
         // Schema compliant INSERT
         String sql = "INSERT INTO sys_audit_log (trace_id, app_user_id, sql_template, table_names, risk_score, " +
-                "result_count, action_taken, create_time, client_ip, execution_time, extra_info, " +
-                "feedback_status, sql_hash, affected_rows, error_code, client_app) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                "action_taken, create_time, extra_info, " +
+                "feedback_status, sql_hash) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -64,11 +64,8 @@ public class JdbcRepository {
             ps.setString(3, logEntry.getSqlTemplate());
             ps.setString(4, logEntry.getTableNames());
             ps.setObject(5, logEntry.getRiskScore());
-            ps.setObject(6, logEntry.getResultCount());
-            ps.setString(7, logEntry.getActionTaken());
-            ps.setObject(8, logEntry.getCreateTime());
-            ps.setString(9, logEntry.getClientIp());
-            ps.setObject(10, logEntry.getExecutionTime());
+            ps.setString(6, logEntry.getActionTaken());
+            ps.setObject(7, logEntry.getCreateTime());
             
             // Enrich extra_info with AST stats for potential future use or debugging
             String extraInfo = logEntry.getExtraInfo();
@@ -89,14 +86,11 @@ public class JdbcRepository {
                      extraInfo = extraInfo.substring(0, lastBrace) + ", " + astJson + "}";
                 }
             }
-            ps.setString(11, extraInfo);
+            ps.setString(8, extraInfo);
             
             // New Schema Columns
-            ps.setObject(12, logEntry.getFeedbackStatus() != null ? logEntry.getFeedbackStatus() : 0);
-            ps.setString(13, logEntry.getSqlHash());
-            ps.setObject(14, logEntry.getAffectedRows() != null ? logEntry.getAffectedRows() : 0);
-            ps.setObject(15, logEntry.getErrorCode() != null ? logEntry.getErrorCode() : 0);
-            ps.setString(16, logEntry.getClientApp());
+            ps.setObject(9, logEntry.getFeedbackStatus() != null ? logEntry.getFeedbackStatus() : 0);
+            ps.setString(10, logEntry.getSqlHash());
             
             ps.executeUpdate();
         } catch (SQLException e) {

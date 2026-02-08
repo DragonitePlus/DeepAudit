@@ -32,12 +32,10 @@ export interface SysAuditLog {
   sqlTemplate: string;
   tableNames: string;
   riskScore: number;
-  resultCount: number;
   actionTaken: 'PASS' | 'BLOCK';
   createTime: string;
-  clientIp: string;
-  executionTime: number;
   feedbackStatus: number; // 0-Unmarked, 1-False Positive, 2-True Positive
+  // AST features are available via extraInfo if parsed, but not as direct properties
 }
 
 // API Responses

@@ -15,15 +15,7 @@ CREATE TABLE IF NOT EXISTS sys_audit_log (
     -- 执行指标 (AI 特征)
                                              action_taken VARCHAR(20) NOT NULL COMMENT '动作: PASS/BLOCK',
                                              risk_score INT DEFAULT 0 COMMENT '综合风险分',
-                                             result_count BIGINT DEFAULT 0 COMMENT 'DQL返回行数 (防拖库)',
-                                             affected_rows BIGINT DEFAULT 0 COMMENT 'DML影响行数 (防删改)',
-                                             execution_time BIGINT DEFAULT 0 COMMENT '耗时(ms) (防慢查询)',
-                                             error_code INT DEFAULT 0 COMMENT '数据库错误码 (防探测)',
-
-    -- 环境特征
-                                             client_ip VARCHAR(64) DEFAULT NULL COMMENT '客户端IP',
-                                             client_app VARCHAR(128) DEFAULT NULL COMMENT '客户端工具 (如 Navicat/Python)',
-
+                                             
     -- 闭环反馈
                                              feedback_status TINYINT DEFAULT 0 COMMENT '人工反馈: 0-未标记, 1-误报(正常), 2-实锤(异常)',
 

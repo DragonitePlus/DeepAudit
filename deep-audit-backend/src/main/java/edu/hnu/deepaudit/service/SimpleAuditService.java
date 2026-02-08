@@ -26,8 +26,6 @@ public class SimpleAuditService implements AuditSink {
         log.setTraceId(request.getTraceId() != null ? request.getTraceId() : UUID.randomUUID().toString());
         log.setAppUserId(request.getAppUserId() != null ? request.getAppUserId() : "unknown");
         log.setSqlTemplate(request.getSql());
-        log.setExecutionTime(request.getExecutionTime());
-        log.setClientIp(request.getClientIp());
         log.setCreateTime(LocalDateTime.now());
         
         // Backend doesn't do parsing/risk analysis, so we set defaults

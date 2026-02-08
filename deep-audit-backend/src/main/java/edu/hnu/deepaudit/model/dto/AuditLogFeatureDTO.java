@@ -5,139 +5,54 @@ package edu.hnu.deepaudit.model.dto;
  * 参考论文 5.1
  */
 public class AuditLogFeatureDTO {
-    private Long timestamp;      // 执行时间戳
-    private Integer rowCount;    // 影响行数
-    private Long execTime;       // 执行耗时
-    private Integer sqlLength;   // SQL 长度
-    private Integer numTables;   // 涉及表数量 (通过 Druid 解析获得)
-    private Integer numJoins;    // 关联查询数量 (通过 Druid 解析获得)
-    private Integer freq1Min;    // 过去1分钟调用频率 (需 Redis 计数器支持)
+    // ORDER MUST MATCH: 
+    // ['hour_of_day', 'is_workday', 'freq_1min', 'sql_type_weight',
+    //  'condition_count', 'join_count', 'nested_level', 'has_always_true']
+    private Float hourOfDay;
+    private Float isWorkday;
+    private Float freq1Min;
+    private Float sqlTypeWeight;
+    private Float conditionCount;
+    private Float joinCount;
+    private Float nestedLevel;
+    private Float hasAlwaysTrue;
 
     // 无参构造函数
     public AuditLogFeatureDTO() {}
 
-    // 全参构造函数
-    public AuditLogFeatureDTO(Long timestamp, Integer rowCount, Long execTime, Integer sqlLength, Integer numTables, Integer numJoins, Integer freq1Min) {
-        this.timestamp = timestamp;
-        this.rowCount = rowCount;
-        this.execTime = execTime;
-        this.sqlLength = sqlLength;
-        this.numTables = numTables;
-        this.numJoins = numJoins;
+    public AuditLogFeatureDTO(Float hourOfDay, Float isWorkday, Float freq1Min, Float sqlTypeWeight, Float conditionCount, Float joinCount, Float nestedLevel, Float hasAlwaysTrue) {
+        this.hourOfDay = hourOfDay;
+        this.isWorkday = isWorkday;
         this.freq1Min = freq1Min;
-    }
-
-    // Builder 入口
-    public static AuditLogFeatureDTOBuilder builder() {
-        return new AuditLogFeatureDTOBuilder();
-    }
-
-    // Builder 内部类
-    public static class AuditLogFeatureDTOBuilder {
-        private Long timestamp;
-        private Integer rowCount;
-        private Long execTime;
-        private Integer sqlLength;
-        private Integer numTables;
-        private Integer numJoins;
-        private Integer freq1Min;
-
-        AuditLogFeatureDTOBuilder() {}
-
-        public AuditLogFeatureDTOBuilder timestamp(Long timestamp) {
-            this.timestamp = timestamp;
-            return this;
-        }
-
-        public AuditLogFeatureDTOBuilder rowCount(Integer rowCount) {
-            this.rowCount = rowCount;
-            return this;
-        }
-
-        public AuditLogFeatureDTOBuilder execTime(Long execTime) {
-            this.execTime = execTime;
-            return this;
-        }
-
-        public AuditLogFeatureDTOBuilder sqlLength(Integer sqlLength) {
-            this.sqlLength = sqlLength;
-            return this;
-        }
-
-        public AuditLogFeatureDTOBuilder numTables(Integer numTables) {
-            this.numTables = numTables;
-            return this;
-        }
-
-        public AuditLogFeatureDTOBuilder numJoins(Integer numJoins) {
-            this.numJoins = numJoins;
-            return this;
-        }
-
-        public AuditLogFeatureDTOBuilder freq1Min(Integer freq1Min) {
-            this.freq1Min = freq1Min;
-            return this;
-        }
-
-        public AuditLogFeatureDTO build() {
-            return new AuditLogFeatureDTO(timestamp, rowCount, execTime, sqlLength, numTables, numJoins, freq1Min);
-        }
+        this.sqlTypeWeight = sqlTypeWeight;
+        this.conditionCount = conditionCount;
+        this.joinCount = joinCount;
+        this.nestedLevel = nestedLevel;
+        this.hasAlwaysTrue = hasAlwaysTrue;
     }
 
     // Getters and Setters
-    public Long getTimestamp() {
-        return timestamp;
-    }
+    public Float getHourOfDay() { return hourOfDay; }
+    public void setHourOfDay(Float hourOfDay) { this.hourOfDay = hourOfDay; }
 
-    public void setTimestamp(Long timestamp) {
-        this.timestamp = timestamp;
-    }
+    public Float getIsWorkday() { return isWorkday; }
+    public void setIsWorkday(Float isWorkday) { this.isWorkday = isWorkday; }
 
-    public Integer getRowCount() {
-        return rowCount;
-    }
+    public Float getFreq1Min() { return freq1Min; }
+    public void setFreq1Min(Float freq1Min) { this.freq1Min = freq1Min; }
 
-    public void setRowCount(Integer rowCount) {
-        this.rowCount = rowCount;
-    }
+    public Float getSqlTypeWeight() { return sqlTypeWeight; }
+    public void setSqlTypeWeight(Float sqlTypeWeight) { this.sqlTypeWeight = sqlTypeWeight; }
 
-    public Long getExecTime() {
-        return execTime;
-    }
+    public Float getConditionCount() { return conditionCount; }
+    public void setConditionCount(Float conditionCount) { this.conditionCount = conditionCount; }
 
-    public void setExecTime(Long execTime) {
-        this.execTime = execTime;
-    }
+    public Float getJoinCount() { return joinCount; }
+    public void setJoinCount(Float joinCount) { this.joinCount = joinCount; }
 
-    public Integer getSqlLength() {
-        return sqlLength;
-    }
+    public Float getNestedLevel() { return nestedLevel; }
+    public void setNestedLevel(Float nestedLevel) { this.nestedLevel = nestedLevel; }
 
-    public void setSqlLength(Integer sqlLength) {
-        this.sqlLength = sqlLength;
-    }
-
-    public Integer getNumTables() {
-        return numTables;
-    }
-
-    public void setNumTables(Integer numTables) {
-        this.numTables = numTables;
-    }
-
-    public Integer getNumJoins() {
-        return numJoins;
-    }
-
-    public void setNumJoins(Integer numJoins) {
-        this.numJoins = numJoins;
-    }
-
-    public Integer getFreq1Min() {
-        return freq1Min;
-    }
-
-    public void setFreq1Min(Integer freq1Min) {
-        this.freq1Min = freq1Min;
-    }
+    public Float getHasAlwaysTrue() { return hasAlwaysTrue; }
+    public void setHasAlwaysTrue(Float hasAlwaysTrue) { this.hasAlwaysTrue = hasAlwaysTrue; }
 }

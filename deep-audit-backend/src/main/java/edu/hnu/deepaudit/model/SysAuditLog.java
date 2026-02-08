@@ -1,5 +1,6 @@
 package edu.hnu.deepaudit.model;
 
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import org.springframework.data.annotation.Transient;
@@ -37,26 +38,11 @@ public class SysAuditLog {
     private Integer riskScore;
 
     /**
-     * Result Set Row Count
-     */
-    private Long resultCount;
-
-    /**
      * Action Taken (PASS/BLOCK)
      */
     private String actionTaken;
 
     private LocalDateTime createTime;
-
-    /**
-     * Client IP Address
-     */
-    private String clientIp;
-
-    /**
-     * SQL Execution Time (ms)
-     */
-    private Long executionTime;
 
     /**
      * JSON/Text for dynamic extension data
@@ -70,9 +56,16 @@ public class SysAuditLog {
 
     // Detailed AST stats
     private String sqlHash;
-    private Long affectedRows;
-    private Integer errorCode;
-    private String clientApp;
+
+    // Virtual fields (Not in DB, stored in extraInfo)
+    @TableField(exist = false)
+    private Integer conditionCount;
+    @TableField(exist = false)
+    private Integer joinCount;
+    @TableField(exist = false)
+    private Integer nestedLevel;
+    @TableField(exist = false)
+    private Boolean hasAlwaysTrue;
 
     public SysAuditLog() {
     }
@@ -84,16 +77,17 @@ public class SysAuditLog {
     public String getSqlHash() { return sqlHash; }
     public void setSqlHash(String sqlHash) { this.sqlHash = sqlHash; }
 
-    public Long getAffectedRows() { return affectedRows; }
-    public void setAffectedRows(Long affectedRows) { this.affectedRows = affectedRows; }
+    public Integer getConditionCount() { return conditionCount; }
+    public void setConditionCount(Integer conditionCount) { this.conditionCount = conditionCount; }
 
-    public Integer getErrorCode() { return errorCode; }
-    public void setErrorCode(Integer errorCode) { this.errorCode = errorCode; }
+    public Integer getJoinCount() { return joinCount; }
+    public void setJoinCount(Integer joinCount) { this.joinCount = joinCount; }
 
-    public String getClientApp() { return clientApp; }
-    public void setClientApp(String clientApp) { this.clientApp = clientApp; }
+    public Integer getNestedLevel() { return nestedLevel; }
+    public void setNestedLevel(Integer nestedLevel) { this.nestedLevel = nestedLevel; }
 
-    public void setResultCount(Long resultCount) { this.resultCount = resultCount; }
+    public Boolean getHasAlwaysTrue() { return hasAlwaysTrue; }
+    public void setHasAlwaysTrue(Boolean hasAlwaysTrue) { this.hasAlwaysTrue = hasAlwaysTrue; }
 
     public String getTraceId() {
         return traceId;
@@ -135,10 +129,6 @@ public class SysAuditLog {
         this.riskScore = riskScore;
     }
 
-    public Long getResultCount() {
-        return resultCount;
-    }
-
     public String getActionTaken() {
         return actionTaken;
     }
@@ -153,22 +143,6 @@ public class SysAuditLog {
 
     public void setCreateTime(LocalDateTime createTime) {
         this.createTime = createTime;
-    }
-
-    public String getClientIp() {
-        return clientIp;
-    }
-
-    public void setClientIp(String clientIp) {
-        this.clientIp = clientIp;
-    }
-
-    public Long getExecutionTime() {
-        return executionTime;
-    }
-
-    public void setExecutionTime(Long executionTime) {
-        this.executionTime = executionTime;
     }
 
     public String getExtraInfo() {
@@ -197,19 +171,16 @@ public class SysAuditLog {
                 Objects.equals(sqlTemplate, that.sqlTemplate) &&
                 Objects.equals(tableNames, that.tableNames) &&
                 Objects.equals(riskScore, that.riskScore) &&
-                Objects.equals(resultCount, that.resultCount) &&
                 Objects.equals(actionTaken, that.actionTaken) &&
                 Objects.equals(createTime, that.createTime) &&
-                Objects.equals(clientIp, that.clientIp) &&
-                Objects.equals(executionTime, that.executionTime) &&
                 Objects.equals(extraInfo, that.extraInfo);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(traceId, appUserId, logicDbName, sqlTemplate, tableNames, riskScore,  // 新增：logicDbName
-                resultCount, actionTaken, createTime, clientIp, executionTime, extraInfo,
-                feedbackStatus, sqlHash, affectedRows, errorCode, clientApp);  // 新增：补充所有字段
+                 actionTaken, createTime, extraInfo,
+                feedbackStatus, sqlHash);  // 新增：补充所有字段
     }
 
     @Override
@@ -221,17 +192,11 @@ public class SysAuditLog {
                 ", sqlTemplate='" + sqlTemplate + '\'' +
                 ", tableNames='" + tableNames + '\'' +
                 ", riskScore=" + riskScore +
-                ", resultCount=" + resultCount +
                 ", actionTaken='" + actionTaken + '\'' +
                 ", createTime=" + createTime +
-                ", clientIp='" + clientIp + '\'' +
-                ", executionTime=" + executionTime +
                 ", extraInfo='" + extraInfo + '\'' +
                 ", feedbackStatus=" + feedbackStatus +  // 新增：包含feedbackStatus
                 ", sqlHash='" + sqlHash + '\'' +  // 新增：包含sqlHash
-                ", affectedRows=" + affectedRows +  // 新增：包含affectedRows
-                ", errorCode=" + errorCode +  // 新增：包含errorCode
-                ", clientApp='" + clientApp + '\'' +  // 新增：包含clientApp
                 '}';
     }
 }
