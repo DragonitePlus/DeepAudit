@@ -1,0 +1,27 @@
+databaseName: deepaudit_biz
+
+dataSources:
+  ds_0:
+    url: jdbc:mysql://127.0.0.1:3306/deepaudit_biz?serverTimezone=UTC&useSSL=false
+    username: root
+    password: 1740084968
+    connectionTimeoutMilliseconds: 30000
+    idleTimeoutMilliseconds: 60000
+    maxLifetimeMilliseconds: 1800000
+    maxPoolSize: 50
+    minPoolSize: 1
+
+rules:
+  - !SHARDING
+    tables:
+      sys_user:
+        actualDataNodes: ds_0.sys_user
+    defaultDatabaseStrategy:
+      standard:
+        shardingColumn: id
+        shardingAlgorithmName: inline
+    shardingAlgorithms:
+      inline:
+        type: INLINE
+        props:
+          algorithm-expression: ds_0
